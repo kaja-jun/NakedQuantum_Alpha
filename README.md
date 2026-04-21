@@ -1,2 +1,2 @@
-# NakedQuantum_Beta
-Beta testing of NakedQuantum
+# NakedQuantum_Alpha
+Alpha testing of NakedQuantum
