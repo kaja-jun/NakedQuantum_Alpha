@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPFS Test</title>
+<style>
+body { background: #000; color: #c8a050; font-family: monospace; padding: 20px; }
+#log { margin-top: 20px; font-size: 14px; line-height: 2; }
+button { background: #c8a050; color: #000; border: none; padding: 12px 24px; font-size: 16px; font-weight: 900; border-radius: 8px; margin: 8px; }
+</style>
+</head>
+<body>
+<h2>◈ OPFS Test</h2>
+<button onclick="runTest()">Run Test</button>
+<div id="log"></div>
+<script>
+function log(msg){
+  document.getElementById('log').innerHTML+=`<div>${msg}</div>`;
+}
+
+async function runTest(){
+  log('⚡ Testing OPFS availability...');
+  
+  try {
+    // Test 1 — OPFS available?
+    const root = await navigator.storage.getDirectory();
+    log('✓ OPFS root accessible');
+    
+    // Test 2 — Can create file?
+    const fh = await root.getFileHandle('nq-test.txt', {create:true});
+    log('✓ File handle created');
+    
+    // Test 3 — Can write?
+    const writable = await fh.createWritable();
+    await writable.write('NakedQuantum OPFS test ◈');
+    await writable.close();
+    log('✓ Write successful');
+    
+    // Test 4 — Can read back?
+    const file = await fh.getFile();
+    const text = await file.text();
+    log('✓ Read back: ' + text);
+    
+    log('🔥 OPFS works! Ready for SQLite.');
+  } catch(err) {
+    log('✕ Failed: ' + err.message);
+    log('Detail: ' + err.name);
+  }
+}
+</script>
+</body>
+</html>
