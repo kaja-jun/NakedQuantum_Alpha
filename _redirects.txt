@@ -1,0 +1,2 @@
+/cosmos.html /cosmos 301
+/index.html / 301

@@ -1,0 +1,19 @@
+{
+  "name": "Quantum Sanctuary",
+  "short_name": "Sanctuary",
+  "description": "PhiloQua — Sanctuary + cosmOS",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
