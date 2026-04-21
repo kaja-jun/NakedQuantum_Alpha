@@ -11,92 +11,43 @@ button { background: #c8a050; color: #000; border: none; padding: 12px 24px; fon
 </style>
 </head>
 <body>
-<h2>◈ OPFS SQLite Test</h2>
+<h2>◈ OPFS Test</h2>
 <button onclick="runTest()">Run Test</button>
-<button onclick="clearTest()">Clear</button>
 <div id="log"></div>
+<script>
+function log(msg){
+  document.getElementById('log').innerHTML+=`<div>${msg}</div>`;
+}
 
-<script type="module">
-import { default as moduleFactory } from 'https://cdn.jsdelivr.net/npm/wa-sqlite@0.9.9/dist/wa-sqlite-async.mjs';
-import * as SQLite from 'https://cdn.jsdelivr.net/npm/wa-sqlite@0.9.9/dist/wa-sqlite.mjs';
-
-let db = null;
-
-async function initDB() {
-  log('⚡ Loading wa-sqlite...');
-  const module = await moduleFactory();
-  log('✓ Module loaded');
-
-  // Use OPFS for persistence
-  const vfs = await SQLite.IDBBatchAtomicVFS.create('nq-test.db', module);
-  SQLite.sqlite3_vfs_register(module, vfs, 1);
+async function runTest(){
+  log('⚡ Testing OPFS availability...');
   
-  const dbId = await SQLite.open_v2(module, 'nq-test.db');
-  db = { module, dbId };
-  log('✓ Database opened');
-  return db;
-}
-
-async function runTest() {
   try {
-    if (!db) await initDB();
+    // Test 1 — OPFS available?
+    const root = await navigator.storage.getDirectory();
+    log('✓ OPFS root accessible');
     
-    log('⚡ Creating table...');
-    await exec('CREATE TABLE IF NOT EXISTS test (id TEXT PRIMARY KEY, value TEXT, created_at INTEGER)');
-    log('✓ Table created');
-
-    const id = 't_' + Date.now();
-    const value = 'Hello from NakedQuantum ◈';
-    await exec(`INSERT OR REPLACE INTO test VALUES ('${id}', '${value}', ${Date.now()})`);
-    log('✓ Row inserted: ' + value);
-
-    const rows = await query('SELECT * FROM test ORDER BY created_at DESC LIMIT 5');
-    log('✓ Rows in DB: ' + rows.length);
-    rows.forEach(r => log('  → ' + r.id + ' | ' + r.value));
-
-    log('🔥 Test passed! OPFS SQLite works on this device.');
+    // Test 2 — Can create file?
+    const fh = await root.getFileHandle('nq-test.txt', {create:true});
+    log('✓ File handle created');
+    
+    // Test 3 — Can write?
+    const writable = await fh.createWritable();
+    await writable.write('NakedQuantum OPFS test ◈');
+    await writable.close();
+    log('✓ Write successful');
+    
+    // Test 4 — Can read back?
+    const file = await fh.getFile();
+    const text = await file.text();
+    log('✓ Read back: ' + text);
+    
+    log('🔥 OPFS works! Ready for SQLite.');
   } catch(err) {
-    log('✕ Error: ' + err.message);
-    console.error(err);
+    log('✕ Failed: ' + err.message);
+    log('Detail: ' + err.name);
   }
 }
-
-async function clearTest() {
-  try {
-    if (!db) await initDB();
-    await exec('DROP TABLE IF EXISTS test');
-    log('◌ Cleared');
-  } catch(err) {
-    log('✕ ' + err.message);
-  }
-}
-
-async function exec(sql) {
-  const { module, dbId } = db;
-  for await (const _ of SQLite.statements(module, dbId, sql)) {}
-}
-
-async function query(sql) {
-  const { module, dbId } = db;
-  const rows = [];
-  for await (const stmt of SQLite.statements(module, dbId, sql)) {
-    const cols = SQLite.column_names(module, stmt);
-    for await (const row of SQLite.rows(module, stmt)) {
-      const obj = {};
-      cols.forEach((c, i) => obj[c] = row[i]);
-      rows.push(obj);
-    }
-  }
-  return rows;
-}
-
-function log(msg) {
-  const el = document.getElementById('log');
-  el.innerHTML += '<div>' + msg + '</div>';
-}
-
-window.runTest = runTest;
-window.clearTest = clearTest;
 </script>
 </body>
 </html>
