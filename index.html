@@ -860,26 +860,32 @@ self.onmessage = async (e) => {
 `;
 
 
-const workerBlob = new Blob([WORKER_CODE], { type: 'application/javascript' });
-const workerUrl = URL.createObjectURL(workerBlob);
-const _worker = new Worker(workerUrl);
-
 let _id = 0;
 const _pending = {};
-_worker.onmessage = e => {
-  const { id, result, error } = e.data;
-  if (_pending[id]) {
-    if (error) _pending[id].reject(new Error(error));
-    else _pending[id].resolve(result);
-    delete _pending[id];
-  }
-};
+let _worker = null;
+let _workerReady = null;
 
-const _workerReady = new Promise((res, rej) => {
-  const msgId = ++_id;
-  _pending[msgId] = { resolve: res, reject: rej };
-  _worker.postMessage({ id: msgId, action: 'INIT' });
-});
+function initWorker(){
+  const workerBlob = new Blob([WORKER_CODE], { type: 'application/javascript' });
+  const workerUrl = URL.createObjectURL(workerBlob);
+  _worker = new Worker(workerUrl);
+
+  _worker.onmessage = e => {
+    const { id, result, error } = e.data;
+    if (_pending[id]) {
+      if (error) _pending[id].reject(new Error(error));
+      else _pending[id].resolve(result);
+      delete _pending[id];
+    }
+  };
+
+  _workerReady = new Promise((res, rej) => {
+    const msgId = ++_id;
+    _pending[msgId] = { resolve: res, reject: rej };
+    _worker.postMessage({ id: msgId, action: 'INIT' });
+  });
+}
+
 
 /* DB HELPERS */
 const dbPut = (s, d) => _workerReady.then(() => new Promise((res, rej) => {
@@ -2284,6 +2290,7 @@ function escHtml(str){if(!str)return"";return String(str).replace(/&/g,"&amp;").
 
 /* EVENT BINDING */
 document.addEventListener('DOMContentLoaded',()=> {
+initWorker();
   document.getElementById('btn-close-void').addEventListener('click',()=>goBack());
   document.getElementById('btn-purge-all').addEventListener('click',purgeAll);
   document.getElementById('btn-back-table').addEventListener('click',()=>goBack());
