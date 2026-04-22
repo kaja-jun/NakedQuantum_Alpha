@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.19</title>
+<title>NakedQuantum v0.19.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -775,7 +775,12 @@ async function initSql() {
   db.run("CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY AUTOINCREMENT, charId TEXT, role TEXT, content TEXT, created_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS summaries(id TEXT PRIMARY KEY, charId TEXT, text TEXT, type TEXT, created_at INTEGER)");
   
-  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries'].forEach(t => {
+  // ADDED MISSING TABLES
+  db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles(id TEXT PRIMARY KEY, discourse_id TEXT, anchors TEXT, created_at INTEGER)");
+  db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks(id TEXT PRIMARY KEY, discourse_id TEXT, char_name TEXT, created_at INTEGER)");
+  
+  // ADDED TO ARRAY
+  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks'].forEach(t => {
     try {
       const info = db.exec("PRAGMA table_info(" + t + ")");
       tableColumns[t] = info[0].values.map(v => v[1]);
@@ -801,9 +806,19 @@ async function save() {
     const data = db.export();
     const root = await navigator.storage.getDirectory();
     const fh = await root.getFileHandle('nq.db', { create: true });
-    const writable = await fh.createWritable();
-    await writable.write(data);
-    await writable.close();
+    
+    try {
+      // Standard Chrome/Desktop approach
+      const writable = await fh.createWritable();
+      await writable.write(data);
+      await writable.close();
+    } catch (err) {
+      // Apple iOS / Safari strictly requires this approach in workers
+      const accessHandle = await fh.createSyncAccessHandle();
+      accessHandle.write(data);
+      accessHandle.flush();
+      accessHandle.close();
+    }
   } catch(e) { console.error('OPFS Save Failed:', e); }
 }
 
