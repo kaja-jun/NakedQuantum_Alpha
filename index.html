@@ -381,6 +381,11 @@ select.cosm-input {
 <body>
 <canvas id="firefly-canvas"></canvas>
 
+<div id="lock-screen" style="position:fixed;inset:0;background:#000;z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;">
+  <div style="color:#a0d8a0;letter-spacing:5px;font-size:11px;font-weight:900;text-transform:uppercase;">NakedQuantum</div>
+  <button id="btn-manual-unlock" style="background:var(--surface2);border:1px solid var(--accent-dim);color:var(--accent);padding:12px 24px;border-radius:20px;font-weight:900;font-size:11px;letter-spacing:1px;text-transform:uppercase;display:none;">Tap to Unlock</button>
+</div>
+
 <div class="nq-header">
   <div class="nq-wordmark" id="nq-wordmark">NakedQuantum</div>
   <div class="header-actions" id="header-actions"></div>
@@ -1466,16 +1471,8 @@ function showPanel(id){
 /* HEADER BUTTONS */
 function updateHeaderButtons(){
   const c=document.getElementById('header-actions');
-  c.innerHTML=`<button class="hdr-btn" id="hdr-unlock">⚿</button><button class="hdr-btn" id="hdr-void">○</button><button class="hdr-btn" id="hdr-export">⩔</button><label class="hdr-import-label">⩓<input type="file" accept=".json" id="import-json-input" style="display:none;"></label><button class="hdr-btn" id="hdr-sync">∞</button><button class="hdr-btn" id="hdr-search">⌖</button>`;
+  c.innerHTML=`<button class="hdr-btn" id="hdr-void">○</button><button class="hdr-btn" id="hdr-export">⩔</button><label class="hdr-import-label">⩓<input type="file" accept=".json" id="import-json-input" style="display:none;"></label><button class="hdr-btn" id="hdr-sync">∞</button><button class="hdr-btn" id="hdr-search">⌖</button>`;
   
-  document.getElementById('hdr-unlock').onclick = async () => {
-    const unlocked = await unlockWithPRF();
-    if(unlocked){
-      document.getElementById('hdr-unlock').style.color = '#a0d8a0'; 
-      if(currentMode==='soup') renderTableView(); else renderSanctuaryView();
-    }
-  };
-
   document.getElementById('hdr-void').onclick=()=>openVoidView();
   document.getElementById('hdr-export').onclick=()=>{showToast('Exporting...');exportJSON();};
   document.getElementById('import-json-input').onchange=e=>importJSON(e);
@@ -2494,13 +2491,43 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
 
   document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){e.preventDefault();if(currentView==='lighthouse')saveCurrentDiscourse();}if(e.key==="Escape"&&currentView==='lighthouse')goBack();if(e.key==="Enter"&&document.getElementById("folder-modal").classList.contains("visible"))confirmNewFolder();if(e.key==="Enter"&&document.getElementById("rename-modal").classList.contains("visible"))confirmRename();if(e.key==="Escape"&&document.getElementById("global-search-modal").classList.contains("visible"))closeGlobalSearch();});
   
-  // Final boot trigger
-  init().catch(err => {
-    console.error("BOOT CRASH:", err);
-    alert("The Abyss is blocked. Check the console.");
-  });
-});
+  // Final boot trigger with Gatekeeper
+  async function bootApp() {
+    const lockScreen = document.getElementById('lock-screen');
+    const manualBtn = document.getElementById('btn-manual-unlock');
+    
+    try {
+      // 1. Auto-trigger Face ID instantly on load
+      const unlocked = await unlockWithPRF();
+      
+      if (unlocked) {
+        // Success: Destroy lock screen and boot app
+        lockScreen.style.display = 'none';
+        await init();
+      } else {
+        // Failed/Canceled: Show manual button so user isn't permanently trapped
+        manualBtn.style.display = 'block';
+        manualBtn.onclick = async () => {
+          const manualUnlock = await unlockWithPRF();
+          if (manualUnlock) {
+            lockScreen.style.display = 'none';
+            await init();
+          } else {
+            if(confirm("Encryption failed. Enter unencrypted offline mode?")) {
+              lockScreen.style.display = 'none';
+              await init();
+            }
+          }
+        };
+      }
+    } catch (err) {
+      console.error("BOOT CRASH:", err);
+      alert("The Abyss is blocked. Check the console.");
+    }
+  }
 
+  bootApp();
+});
 
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 
