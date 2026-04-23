@@ -106,7 +106,7 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .btn-back-table:active { color: var(--text); border-color: var(--accent-dim); }
 .btn-back-arrow { font-size: 14px; opacity: 0.7; }
 .lighthouse-tools { display: flex; align-items: center; gap: 6px; }
-.view-toggle { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0px; overflow: hidden; }
+.view-toggle { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1px; overflow: hidden; }
 .view-toggle-btn { background: none; border: none; color: var(--muted); font-size: 11px; padding: 6px 12px; font-weight: 700; letter-spacing: 0.5px; }
 .view-toggle-btn.active { background: var(--surface2); color: var(--text); }
 .tbtn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 11px; padding: 7px 11px; border-radius: 8px; font-weight: 700; letter-spacing: 0.5px; white-space: nowrap; }
@@ -252,14 +252,6 @@ select.cosm-input {
 .global-search-result-type.folder { background: var(--surface2); color: var(--accent); }
 .global-search-result-type.discourse { background: var(--surface); color: var(--text); }
 .global-search-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 24px; }
-
-.fab-container { position: fixed; bottom: 28px; right: 20px; z-index: 700; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-.fab-menu { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity 0.2s ease, transform 0.2s ease; }
-.fab-menu.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
-.fab-item { display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--surface2); border: 1px solid var(--accent-dim); color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 1px; padding: 10px 20px; border-radius: 20px; white-space: nowrap; cursor: pointer; min-width: 160px; }
-.fab-item:active { opacity: 0.7; transform: scale(0.97); }
-.fab-main { width: 52px; height: 52px; border-radius: 50%; background: var(--accent); border: none; color: #000; font-size: 24px; font-weight: 900; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 20px rgba(200,160,80,0.3); transition: transform 0.2s ease; flex-shrink: 0; }
-.fab-main.open { transform: rotate(45deg); }
 
 .chat-input-wrapper {
   background: var(--surface);
