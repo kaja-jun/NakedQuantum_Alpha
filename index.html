@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.21</title>
+<title>NakedQuantum v0.21.1</title>
 <style>
 :root {
   --bg: #000000;
@@ -1136,21 +1136,29 @@ function showSovereignKey() {
 }
 
 async function unlockWithFallbackKey() {
-  const input = document.getElementById('fallback-key-input').value.trim();
-  if(!input) return;
+  const inputEl = document.getElementById('fallback-key-input');
+  const input = inputEl.value.trim();
+  
+  if(!input) {
+    showToast("⚠ Please paste your key first");
+    return;
+  }
+  
   try {
     const buf = b64ToBuf(input);
     const keyBytes = new Uint8Array(buf);
-    if(keyBytes.length !== 32) throw new Error("Invalid length");
+    
+    if(keyBytes.length !== 32) throw new Error("Incorrect key length");
     
     window.sessionSovereignKey = keyBytes;
     await setEncryptionKey(keyBytes);
     
     document.getElementById('lock-screen').style.display = 'none';
-    showToast("◈ Abyss Unlocked via Key");
+    showToast("◈ Abyss Unlocked");
     await init();
   } catch(e) {
-    showToast("Invalid Key format");
+    inputEl.value = ''; // Clear the bad input so they can try again
+    showToast("⚠ Invalid Sovereign Key");
   }
 }
 
