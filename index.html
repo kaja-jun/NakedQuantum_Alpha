@@ -140,7 +140,7 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 /* THE FORMATTING PILL */
 .format-toolbar {
   margin-top: auto; /* Pushes it to the bottom of the writing space */
-  margin-bottom: 8px; /* The safety buffer to dodge the iOS Home Indicator */
+  margin-bottom: 12px; /* The safety buffer to dodge the iOS Home Indicator */
   background: rgba(10,10,10,0.85);
   border: 1px solid var(--border);
   backdrop-filter: blur(12px);
@@ -166,7 +166,7 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .fmt-btn.code-btn { font-family: 'Menlo', monospace; font-size: 11px; }
 .fmt-divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
 
-.content-textarea { flex: 1; width: 100%; min-height: 320px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; font-size: 15px; line-height: 1.8; outline: none; resize: none; font-family: var(--font-serif); caret-color: var(--accent); -webkit-overflow-scrolling: touch; }
+.content-textarea { flex: 1; width: 100%; min-height: 320px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 12px; font-size: 15px; line-height: 1.8; outline: none; resize: none; font-family: var(--font-serif); caret-color: var(--accent); -webkit-overflow-scrolling: touch; }
 .content-textarea:focus { border-color: var(--accent-dim); }
 .content-view { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; font-size: 15px; line-height: 1.8; font-family: var(--font-serif); color: var(--text); min-height: 200px; }
 .content-view h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin: 0 0 16px; }
