@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.21.1</title>
+<title>NakedQuantum v0.21.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -1139,8 +1139,19 @@ async function unlockWithFallbackKey() {
   const inputEl = document.getElementById('fallback-key-input');
   const input = inputEl.value.trim();
   
+  // Helper to flash error directly on the input box
+  const showError = (msg) => {
+    inputEl.value = '';
+    inputEl.placeholder = msg;
+    inputEl.style.borderColor = '#ff6060';
+    setTimeout(() => {
+      inputEl.style.borderColor = 'var(--border)';
+      inputEl.placeholder = 'Paste Sovereign Key...';
+    }, 2500);
+  };
+  
   if(!input) {
-    showToast("⚠ Please paste your key first");
+    showError("⚠ PASTE KEY FIRST");
     return;
   }
   
@@ -1154,11 +1165,10 @@ async function unlockWithFallbackKey() {
     await setEncryptionKey(keyBytes);
     
     document.getElementById('lock-screen').style.display = 'none';
-    showToast("◈ Abyss Unlocked");
+    showToast("◈ Abyss Unlocked"); // This toast is fine because the keyboard drops when app loads
     await init();
   } catch(e) {
-    inputEl.value = ''; // Clear the bad input so they can try again
-    showToast("⚠ Invalid Sovereign Key");
+    showError("⚠ INVALID KEY");
   }
 }
 
