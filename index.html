@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.20</title>
+<title>NakedQuantum v0.20.1</title>
 <style>
 :root {
   --bg: #000000;
@@ -780,12 +780,12 @@ async function initSql() {
   db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles(id TEXT PRIMARY KEY, discourse_id TEXT, anchors TEXT, created_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks(id TEXT PRIMARY KEY, discourse_id TEXT, char_name TEXT, created_at INTEGER)");
   // Encrypted shadow tables
-db.run("CREATE TABLE IF NOT EXISTS cosm_folders_enc(id TEXT PRIMARY KEY, enc TEXT)");
-db.run("CREATE TABLE IF NOT EXISTS cosm_discourses_enc(id TEXT PRIMARY KEY, enc TEXT)");
-db.run("CREATE TABLE IF NOT EXISTS characters_enc(id TEXT PRIMARY KEY, enc TEXT)");
-db.run("CREATE TABLE IF NOT EXISTS summaries_enc(id TEXT PRIMARY KEY, enc TEXT)");
-db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles_enc(id TEXT PRIMARY KEY, enc TEXT)");
-db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks_enc(id TEXT PRIMARY KEY, enc TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS cosm_folders_enc(id TEXT PRIMARY KEY, enc TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS cosm_discourses_enc(id TEXT PRIMARY KEY, enc TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS characters_enc(id TEXT PRIMARY KEY, enc TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS summaries_enc(id TEXT PRIMARY KEY, enc TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles_enc(id TEXT PRIMARY KEY, enc TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks_enc(id TEXT PRIMARY KEY, enc TEXT)");
 
   // ADDED TO ARRAY
   ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks'].forEach(t => {
@@ -848,8 +848,8 @@ function toObjects(res) {
 }
 
 async function encryptObj(obj){
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt(
+  const iv = self.crypto.getRandomValues(new Uint8Array(12));
+  const ct = await self.crypto.subtle.encrypt(
     {name:'AES-GCM', iv},
     encKey,
     new TextEncoder().encode(JSON.stringify(obj))
@@ -857,12 +857,12 @@ async function encryptObj(obj){
   return JSON.stringify({iv:Array.from(iv), ct:Array.from(new Uint8Array(ct))});
 }
 
-async function decryptStr(str){
-  const {iv, ct} = JSON.parse(str);
-  const dec = await crypto.subtle.decrypt(
-    {name:'AES-GCM', iv: new Uint8Array(iv)},
+async function decryptObj(encData){
+  const obj = typeof encData === 'string' ? JSON.parse(encData) : encData;
+  const dec = await self.crypto.subtle.decrypt(
+    {name:'AES-GCM', iv: new Uint8Array(obj.iv)},
     encKey,
-    new Uint8Array(ct)
+    new Uint8Array(obj.ct)
   );
   return JSON.parse(new TextDecoder().decode(dec));
 }
@@ -873,7 +873,7 @@ self.onmessage = async (e) => {
     if (action === 'INIT') { await initSql(); self.postMessage({ id, result: 'ready' }); return; }
 
     if (action === 'SET_KEY') {
-      encKey = await crypto.subtle.importKey(
+      encKey = await self.crypto.subtle.importKey(
         'raw', new Uint8Array(data.keyBytes),
         {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
       );
@@ -887,43 +887,39 @@ self.onmessage = async (e) => {
       return;
     }
 
+    const isEnc = encKey && store !== 'history';
+    const targetStore = isEnc ? (store + "_enc") : store;
+
     let result = null;
     if (action === 'GET_ALL') {
-      const rows = toObjects(db.exec("SELECT * FROM " + store));
-      if(encKey && store !== 'history'){
-        result = await Promise.all(rows.map(async r => {
-          if(r.enc && typeof r.enc === 'string') return await decryptStr(r.enc);
-          return r;
-        }));
+      const rows = toObjects(db.exec("SELECT * FROM " + targetStore));
+      if (isEnc) {
+        result = await Promise.all(rows.map(async r => r.enc ? await decryptObj(r.enc) : r));
       } else { result = rows; }
     }
     else if (action === 'GET') {
-      const res = db.exec("SELECT * FROM " + store + " WHERE id=?", [data.id]);
+      const res = db.exec("SELECT * FROM " + targetStore + " WHERE id=?", [data.id]);
       const row = res.length ? toObjects(res)[0] : null;
-      if(encKey && row && row.enc && store !== 'history'){
-        result = await decryptStr(row.enc);
+      if (isEnc && row && row.enc) {
+        result = await decryptObj(row.enc);
       } else { result = row; }
     }
     else if (action === 'GET_BY_INDEX') {
-      const rows = toObjects(db.exec("SELECT * FROM " + store + " WHERE " + field + "=?", [value]));
-      if(encKey && store !== 'history'){
-        result = await Promise.all(rows.map(async r => {
-          if(r.enc && typeof r.enc === 'string') return await decryptStr(r.enc);
-          return r;
-        }));
-      } else { result = rows; }
+      if (isEnc) {
+        const allRows = toObjects(db.exec("SELECT * FROM " + targetStore));
+        const decrypted = await Promise.all(allRows.map(async r => r.enc ? await decryptObj(r.enc) : r));
+        result = decrypted.filter(r => r && r[field] === value);
+      } else {
+        result = toObjects(db.exec("SELECT * FROM " + store + " WHERE " + field + "=?", [value]));
+      }
     }
     else if (action === 'PUT') {
       const obj = { ...data };
       if ('isDeleted' in obj) { obj.is_deleted = obj.isDeleted ? 1 : 0; }
 
-      if(encKey && store !== 'history'){
-        // Store encrypted — only id and enc column needed
+      if (isEnc) {
         const enc = await encryptObj(obj);
-        db.run(
-          "INSERT INTO " + store + "_enc(id, enc) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET enc=excluded.enc",
-          [obj.id, enc]
-        );
+        db.run("INSERT INTO " + targetStore + "(id, enc) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET enc=excluded.enc", [obj.id, enc]);
       } else {
         const validCols = tableColumns[store] || [];
         const keys = Object.keys(obj).filter(k => validCols.includes(k));
@@ -941,11 +937,16 @@ self.onmessage = async (e) => {
       saveTimer = setTimeout(save, 500);
       result = 'ok';
     }
-    else if (action === 'DELETE') { db.run("DELETE FROM " + store + " WHERE id=?", [data.id]); save(); result = 'ok'; }
+    else if (action === 'DELETE') { 
+      db.run("DELETE FROM " + store + " WHERE id=?", [data.id]); 
+      try { db.run("DELETE FROM " + store + "_enc WHERE id=?", [data.id]); } catch(e){}
+      save(); 
+      result = 'ok'; 
+    }
     self.postMessage({ id, result });
   } catch(err) { self.postMessage({ id, error: err.message }); }
 };
-
+`;
 
 
 let _id = 0;
@@ -1050,16 +1051,14 @@ async function deleteMosaicTile(dId){const t=await getMosaicTile(dId);if(t)await
 async function getBacklink(dId){const l=await dbGetByIndex("cosm_backlinks","discourse_id",dId);return l.length>0?l[0]:null;}
 
 /* PRF UNLOCK */
-const PRF_SALT = new TextEncoder().encode('NakedQuantum_v1_salt');
+const PRF_SALT = new TextEncoder().encode('NakedQuantum_v1_salt').buffer;
 const WA_CRED_KEY = 'nq_prf_cred_id';
 
 function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
 function b64ToBuf(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)).buffer; }
 
 async function unlockWithPRF(){
-  // Try existing credential
   const stored = localStorage.getItem(WA_CRED_KEY);
-  
   try {
     const opts = {
       publicKey: {
@@ -1081,7 +1080,6 @@ async function unlockWithPRF(){
       return true;
     }
   } catch(e) {
-    // prf failed — try register first time
     if(!stored){
       try {
         const cred = await navigator.credentials.create({
@@ -1097,13 +1095,12 @@ async function unlockWithPRF(){
         });
         localStorage.setItem(WA_CRED_KEY, bufToB64(cred.rawId));
         showToast('◈ Face ID registered — unlock now');
-        return await unlockWithPRF(); // recurse once to derive key
+        return await unlockWithPRF();
       } catch(regErr) {
         console.error('PRF register failed:', regErr);
       }
     }
   }
-  // Fallback — no encryption, app still works
   showToast('⚠ Running without encryption');
   return false;
 }
@@ -1112,19 +1109,13 @@ async function unlockWithPRF(){
 async function init(){
   await _workerReady;
   
-  // Try to unlock encryption — non-blocking, app works either way
-  if(location.protocol === 'https:'){
-    unlockWithPRF().catch(e => console.warn('PRF unlock failed:', e));
-  }
-  
-  // Force the absolute starting state
   currentMode = 'soup';
   currentView = 'soup';
   currentFolderId = null;
   breadcrumbPath = [{id: null, name: '◈ The Soup'}];
   
   updateHeaderButtons();
-  showPanel('view-soup');
+  showPanel('view-soup'); 
   await renderTableView();
   
   document.getElementById('input-api-key').value=localStorage.getItem('nq_api_key')||'';
@@ -1138,10 +1129,8 @@ async function handleSend() {
   const text = input.value.trim();
   if (!text) return;
 
-  // 1. Pull Coordinates from localStorage
   const apiKey = localStorage.getItem('nq_api_key');
   const activeModel = localStorage.getItem('nq_model') || "gpt-4o"; 
-  // We use a base URL and append the specific path
   const baseUrl = localStorage.getItem('nq_base_url') || "https://openrouter.ai/api/v1";
   const strikeUrl = `${baseUrl}/chat/completions`;
 
@@ -1150,16 +1139,13 @@ async function handleSend() {
     return;
   }
 
-  // UI: Show user message
   appendMessage('user', text);
   input.value = '';
 
-  // 2. Prepare History (Pulled from IndexedDB for depth)
   const historyData = await getFromDB('history', 'current_thread') || { messages: [] };
   historyData.messages.push({ role: 'user', content: text });
 
   try {
-    // 3. The Strike
     const response = await fetch(strikeUrl, {
       method: "POST",
       headers: {
@@ -1175,12 +1161,9 @@ async function handleSend() {
     });
 
     const data = await response.json();
-    
     if (data.error) throw new Error(data.error.message);
-
     const aiText = data.choices[0].message.content;
 
-    // 4. Update UI & Witnessing History
     appendMessage('assistant', aiText);
     historyData.messages.push({ role: 'assistant', content: aiText });
     await saveToDB('history', { id: 'current_thread', messages: historyData.messages });
@@ -1243,6 +1226,7 @@ async function confirmBurnDisc(){
   closeOverlay();
   showToast(`🔥 Burned — ${newMessages.length} chapters`);
 }
+
 /* PERSONA FUNCTIONS */
 async function openPersonaView(){
   const p=getGlobalPersona();
@@ -1349,7 +1333,6 @@ function enterSelectMode(item){
   selectMode=true;
   selectedItems=new Set();
   selectedItems.add(item.id);
-  // Render after population
   if(currentMode==='soup') renderTableView().then(()=>renderSelectBar());
   else renderSanctuaryView().then(()=>renderSelectBar());
 }
@@ -1396,7 +1379,6 @@ function toggleSelectItem(id){
   else selectedItems.add(id);
   if(selectedItems.size===0){exitSelectMode();return;}
   renderSelectBar();
-  // Force UI update to show gold rings
   if(currentMode==='soup') renderTableView();
   else renderSanctuaryView();
 }
@@ -1415,8 +1397,6 @@ async function batchDelete(){
   exitSelectMode();
   showToast(`Moved to Void ◌`);
 }
-
-
 
 async function batchMove(){
   if(!selectedItems.size)return;
@@ -1475,7 +1455,6 @@ function showPanel(id){
   if(active)active.classList.remove('hidden');
   currentView=id.replace('view-','');
   
-  // Show bottom bar only on main views
   if(id==='view-soup'){renderDefaultBar('soup');}
   else if(id==='view-sanctuary'){renderDefaultBar('sanctuary');}
   else{hideBottomBar();}
@@ -1487,7 +1466,16 @@ function showPanel(id){
 /* HEADER BUTTONS */
 function updateHeaderButtons(){
   const c=document.getElementById('header-actions');
-  c.innerHTML=`<button class="hdr-btn" id="hdr-void">○</button><button class="hdr-btn" id="hdr-export">⩔</button><label class="hdr-import-label">⩓<input type="file" accept=".json" id="import-json-input" style="display:none;"></label><button class="hdr-btn" id="hdr-sync">∞</button><button class="hdr-btn" id="hdr-search">⌖</button>`;
+  c.innerHTML=`<button class="hdr-btn" id="hdr-unlock">⚿</button><button class="hdr-btn" id="hdr-void">○</button><button class="hdr-btn" id="hdr-export">⩔</button><label class="hdr-import-label">⩓<input type="file" accept=".json" id="import-json-input" style="display:none;"></label><button class="hdr-btn" id="hdr-sync">∞</button><button class="hdr-btn" id="hdr-search">⌖</button>`;
+  
+  document.getElementById('hdr-unlock').onclick = async () => {
+    const unlocked = await unlockWithPRF();
+    if(unlocked){
+      document.getElementById('hdr-unlock').style.color = '#a0d8a0'; 
+      if(currentMode==='soup') renderTableView(); else renderSanctuaryView();
+    }
+  };
+
   document.getElementById('hdr-void').onclick=()=>openVoidView();
   document.getElementById('hdr-export').onclick=()=>{showToast('Exporting...');exportJSON();};
   document.getElementById('import-json-input').onchange=e=>importJSON(e);
@@ -1503,10 +1491,7 @@ async function goBack() {
   if (currentView === 'lighthouse' && currentDiscourseId) {
     await saveCurrentDiscourse(true);
   }
-  
-  // Ensure we aren't navigating back to a 'null' state that breaks the renderer
   if (!currentFolderId) currentFolderId = null; 
-
   if (currentMode === 'soup') { 
     showPanel('view-soup'); 
     await renderTableView(); 
@@ -1533,7 +1518,6 @@ async function renderTableView() {
   surface.innerHTML = '';
   renderBreadcrumb();
 
-  // The Quantum Corrector: Normalizes all forms of "empty"
   const safeMatch = (a, b) => {
     const isANull = (!a || String(a) === 'null' || String(a) === 'root' || String(a) === 'undefined');
     const isBNull = (!b || String(b) === 'null' || String(b) === 'root' || String(b) === 'undefined');
@@ -1549,7 +1533,6 @@ async function renderTableView() {
   const allF = (await getFolders()) || [];
   const allD = (await getDiscourses()) || [];
 
-  // Filter using safeMatch to catch the trapped data
   const cf = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, currentFolderId));
   const notes = allD.filter(d => !d.isDeleted && d.item_type === 'note' && safeMatch(d.folder_id, currentFolderId));
   const discs = allD.filter(d => !d.isDeleted && d.item_type !== 'note' && safeMatch(d.folder_id, currentFolderId));
@@ -1624,7 +1607,6 @@ async function buildDiscourseCard(d){
 
   card.addEventListener('click', () => {
     if (window.longPressConsumed) { window.longPressConsumed = false; return; }
-    // FIX: Using direct variable check, not window.
     if (typeof selectMode !== 'undefined' && selectMode) { toggleSelectItem(d.id); return; }
     openDiscourse(d.id);
   });
@@ -1716,7 +1698,6 @@ async function newDiscourseInCurrent(){
 }
 
 function handleNewDiscourse() {
-  // Use a loose check to catch null, undefined, or empty strings
   if (!currentFolderId || currentFolderId === 'root') {
     newDiscourseAtSoup();
   } else {
@@ -1726,24 +1707,17 @@ function handleNewDiscourse() {
 
 async function newDiscourseAtSoup() {
   const folders = await getFolders();
-  // Safe filtering for existing Unknown folders
   const count = folders.filter(f => f.name && f.name.startsWith('Unknown_')).length + 1;
   const fn = `Unknown_${count}`;
   
-  // 1. Create the folder at the root (null)
   const fId = await createFolder(fn, null);
-  
-  // 2. Set context to the NEW folder
   currentFolderId = fId;
-  
-  // 3. Create the discourse INSIDE that new folder
   const disc = await createDiscourse({
     title: "Untitled Discourse",
     raw_text: "",
     folder_id: fId
   });
   
-  // 4. Update the path and jump in
   breadcrumbPath = [{id: null, name: '◈ The Soup'}, {id: fId, name: fn}];
   await openDiscourse(disc.id);
   
@@ -1777,13 +1751,13 @@ async function renderSanctuaryView(){
   const g=document.createElement('div');g.className='cards-grid';
   for(const c of filtered){
         const card=document.createElement('div');card.className='character-card card';
-    if(selectedItems.has(c.id)) card.classList.add('card-selected'); // <-- Add this line
+    if(selectedItems.has(c.id)) card.classList.add('card-selected'); 
     
     card.innerHTML=`<div><div class="char-card-name">${escHtml(c.name)}</div><div class="char-card-role">${escHtml(c.role||'No role assigned')}</div></div><div class="char-card-footer"><div class="char-card-meta">${new Date(c.updated_at).toLocaleDateString()}</div></div>`;
     
     card.addEventListener('click',()=>{
       if(longPressConsumed){longPressConsumed=false;return;}
-      if(selectMode){toggleSelectItem(c.id);return;} // <-- Add this line to intercept clicks
+      if(selectMode){toggleSelectItem(c.id);return;} 
       openChat(c.id);
     });
 
@@ -1862,7 +1836,7 @@ async function openChat(id){
   const history=await dbGetByIndex('history','charId',id);
   history.forEach(h=>appendChatMessage(h.role,h.content));
   showPanel('view-chat');
-chatPersonaOverride=char.player_role_id||null;
+chatPersonaOverride=c.player_role_id||null;
 updatePersonaPill();
 
 }
@@ -1873,7 +1847,6 @@ async function handleChatSend(){
   input.value='';input.style.height='auto';
   appendChatMessage('user',text);
   
-  // Save user message FIRST before AI call
   await dbPut('history',{charId:activeCharId,role:'user',content:text,created_at:Date.now()});
   
   const char=await getCharacter(activeCharId);
@@ -2134,7 +2107,6 @@ async function confirmNewFolder(){
 }
 
 /* MANAGEMENT */
-/* MANAGEMENT */
 function openManagementModal(item){
   mgmtItem=item;
   const pills=[
@@ -2251,7 +2223,6 @@ let modelHistory = JSON.parse(localStorage.getItem('nq_model_history')) || [
   'google/gemini-2.0-flash-001'
 ];
 
-// 2. Refresh the Selector
 function renderModelSelect() {
   const select = document.getElementById('input-model');
   const currentModel = localStorage.getItem('nq_model');
@@ -2260,13 +2231,12 @@ function renderModelSelect() {
   modelHistory.forEach(model => {
     const opt = document.createElement('option');
     opt.value = model;
-    opt.innerText = model; // Full ID for clarity
+    opt.innerText = model;
     if(model === currentModel) opt.selected = true;
     select.appendChild(opt);
   });
 }
 
-// 3. Summon New Engine
 function summonNewModel() {
   const input = document.getElementById('summon-input');
   const val = input.value.trim();
@@ -2276,13 +2246,12 @@ function summonNewModel() {
     modelHistory.push(val);
     localStorage.setItem('nq_model_history', JSON.stringify(modelHistory));
     renderModelSelect();
-    document.getElementById('input-model').value = val; // Auto-select it
+    document.getElementById('input-model').value = val;
     input.value = '';
     showToast("Engine Summoned");
   }
 }
 
-// 4. Targeted Purge
 function removeActiveModel() {
   const select = document.getElementById('input-model');
   const target = select.value;
@@ -2298,35 +2267,22 @@ function removeActiveModel() {
   showToast("Purged to the Abyss");
 }
 
-// 5. Update the Open Settings trigger
 function openSettingsModal(){
-  // 1. Fill the inputs
   document.getElementById('input-api-key').value = localStorage.getItem('nq_api_key') || '';
   document.getElementById('input-base-url').value = localStorage.getItem('nq_base_url') || 'https://openrouter.ai/api/v1';
-  
-  // 2. Refresh the engine list
   renderModelSelect();
-  
-  // 3. Show the UI
   document.getElementById('settings-modal').classList.add('visible');
   document.getElementById('cosm-overlay').classList.add('active');
 }
-
-
-// Triple-check your closeOverlay function exists:
 
 function closeOverlay(){
   document.getElementById("cosm-overlay").classList.remove("active");
   ['folder-modal','rename-modal','move-modal',
  'global-search-modal','capture-modal','settings-modal',
  'burn-disc-modal','role-modal','persona-select-modal'
-]
-
-  .forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
+  ].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
   mgmtItem=null;
 }
-
-
 
 /* EDITOR */
 function setEditorMode(mode){
@@ -2422,7 +2378,7 @@ function startLP(e,card,item){
   longPressTimer=setTimeout(()=>{
     isLongPress=true;longPressConsumed=true;
     card.classList.remove('long-pressing');
-    card.classList.add('card-selected'); // stays gold
+    card.classList.add('card-selected'); 
     mgmtItem=item;
     openManagementModal(item);
   },LONG_PRESS_DURATION);
@@ -2486,15 +2442,14 @@ document.addEventListener('click',e=>{
   document.getElementById('btn-capture-confirm').addEventListener('click',confirmQuickCapture);
   document.getElementById('capture-body').addEventListener('input',function(){const t=document.getElementById('capture-title');if(t.dataset.userEdited==='true')return;const w=this.value.split('\n')[0].trim().split(/\s+/).filter(Boolean).slice(0,4).join(' ');t.value=w||'';});
   document.getElementById('capture-title').addEventListener('input',function(){this.dataset.userEdited='true';});
-    // --- CLEAN SETTINGS WIRING ---
-  // Update your existing Confirm Listener
+
 document.getElementById('btn-burn-cancel').addEventListener('click',closeOverlay);
 document.getElementById('btn-burn-confirm').addEventListener('click',confirmBurnDisc);
 
 document.getElementById('btn-settings-confirm').addEventListener('click', () => {
   const k = document.getElementById('input-api-key').value.trim();
   const u = document.getElementById('input-base-url').value.trim();
-  const m = document.getElementById('input-model').value; // Grabs the selected option
+  const m = document.getElementById('input-model').value; 
   localStorage.setItem('nq_api_key', k);
   localStorage.setItem('nq_base_url', u);
   localStorage.setItem('nq_model', m);
@@ -2538,6 +2493,7 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
   });
 
   document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){e.preventDefault();if(currentView==='lighthouse')saveCurrentDiscourse();}if(e.key==="Escape"&&currentView==='lighthouse')goBack();if(e.key==="Enter"&&document.getElementById("folder-modal").classList.contains("visible"))confirmNewFolder();if(e.key==="Enter"&&document.getElementById("rename-modal").classList.contains("visible"))confirmRename();if(e.key==="Escape"&&document.getElementById("global-search-modal").classList.contains("visible"))closeGlobalSearch();});
+  
   // Final boot trigger
   init().catch(err => {
     console.error("BOOT CRASH:", err);
