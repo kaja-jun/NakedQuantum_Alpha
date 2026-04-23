@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.21.2</title>
+<title>NakedQuantum v0.21.3</title>
 <style>
 :root {
   --bg: #000000;
@@ -113,7 +113,8 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .tbtn.danger { color: #ff6060; border-color: var(--danger); }
 .tbtn.gold { color: var(--accent); border-color: var(--accent-dim); }
 .lighthouse-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 28px 20px 60px; display: flex; flex-direction: column; gap: 16px; }
-.lighthouse-inner { max-width: 680px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; min-height: 65vh; }
+/* LIGHTHOUSE VIEW FIXES (Expanded Textarea & Overlap) */
+.lighthouse-inner {display: flex;flex-direction: column;height: calc(100vh - 120px); /* Adjust based on your nav height */padding-bottom: 20px;}
 .discourse-title-input { width: 100%; background: none; border: none; border-bottom: 1px solid var(--border); color: var(--text); font-size: 22px; font-weight: 700; padding: 6px 0 12px; outline: none; font-family: var(--font-serif); caret-color: var(--accent); }
 .discourse-title-input::placeholder { color: var(--muted); opacity: 0.6; }
 .discourse-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
@@ -359,12 +360,12 @@ select.cosm-input {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-@media (max-width: 480px) { .lighthouse-tools { gap: 4px; } .tbtn { padding: 7px 8px; font-size: 10px; } .view-toggle-btn { padding: 6px 9px; } .cards-grid { gap: 8px; } .lighthouse-scroll { padding: 20px 14px 60px; } }
+@media (max-width: 480px) { .lighthouse-tools { gap: 10px; } .tbtn { padding: 7px 8px; font-size: 11px; } .view-toggle-btn { padding: 6px 9px; } .cards-grid { gap: 8px; } .lighthouse-scroll { padding: 20px 14px 60px; } }
 
 /* FLOATING BOTTOM PILL */
 .bottom-bar { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(10,10,10,0.85); border: 1px solid var(--border); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 700; padding: 6px; border-radius: 24px; display: none; box-shadow: 0 10px 40px rgba(0,0,0,0.9); width: max-content; max-width: 92vw; }
 .bottom-bar.visible { display: block; }
-.bottom-bar-scroll { display: flex; flex-direction: row; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 0 4px; gap: 6px; }
+.bottom-bar-scroll { display: flex; flex-direction: row; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 0 10px; gap: 6px; }
 .bottom-bar-scroll::-webkit-scrollbar { display: none; }
 .bar-pill { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 54px; padding: 8px 12px; border-radius: 18px; background: transparent; border: 1px solid transparent; cursor: pointer; flex-shrink: 0; transition: background 0.15s, border-color 0.15s; }
 .bar-pill:active { background: var(--surface2); border-color: var(--accent-dim); }
