@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.20.1</title>
+<title>NakedQuantum v0.21</title>
 <style>
 :root {
   --bg: #000000;
@@ -384,6 +384,9 @@ select.cosm-input {
 <div id="lock-screen" style="position:fixed;inset:0;background:#000;z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;">
   <div style="color:#a0d8a0;letter-spacing:5px;font-size:11px;font-weight:900;text-transform:uppercase;">NakedQuantum</div>
   <button id="btn-manual-unlock" style="background:var(--surface2);border:1px solid var(--accent-dim);color:var(--accent);padding:12px 24px;border-radius:20px;font-weight:900;font-size:11px;letter-spacing:1px;text-transform:uppercase;display:none;">Tap to Unlock</button>
+  
+  <input type="password" id="fallback-key-input" placeholder="Paste Sovereign Key..." class="cosm-input" style="display:none; width:250px; text-align:center;">
+  <button id="btn-fallback-unlock" style="display:none; background:var(--accent); color:#000; font-weight:900; padding:12px 24px; border-radius:20px; border:none; text-transform:uppercase; font-size:11px; letter-spacing:1px;">Force Unlock</button>
 </div>
 
 <div class="nq-header">
@@ -685,6 +688,14 @@ select.cosm-input {
   <div style="display:flex; gap:8px; align-items:center;">
     <input type="text" id="summon-input" class="cosm-input" placeholder="Paste OpenRouter ID..." style="margin:0 !important; flex:1;">
     <button onclick="summonNewModel()" style="background:var(--accent); color:#000; width:60px; height:40px; border-radius:8px; font-weight:900; font-size:11px; border:none;">ADD</button>
+  </div>
+<div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Sovereign Key Backup</label>
+    <p style="font-size:10px; color:var(--muted); line-height:1.4; margin:4px 0 8px;">If you lose this key and your device, your words belong to the Abyss forever.</p>
+    <div style="display:flex; gap:8px;">
+      <button onclick="showSovereignKey()" style="background:var(--surface2); color:var(--accent); border:1px solid var(--accent-dim); width:100%; height:40px; border-radius:8px; font-weight:900; font-size:11px;">Reveal & Copy Key</button>
+    </div>
+    <input type="text" id="export-key-display" class="cosm-input" readonly style="display:none; margin-top:8px; text-align:center; font-family:monospace; font-size:11px; color:#a0d8a0; border-color:#a0d8a0;">
   </div>
 
   <div class="modal-buttons" style="margin-top:25px;">
@@ -1078,8 +1089,9 @@ async function unlockWithPRF(){
     const assertion = await navigator.credentials.get(opts);
     const ext = assertion.getClientExtensionResults();
 
-    if(ext.prf?.results?.first){
+   if(ext.prf?.results?.first){
       const keyBytes = new Uint8Array(ext.prf.results.first);
+      window.sessionSovereignKey = keyBytes; // Capture in RAM for backup
       await setEncryptionKey(keyBytes);
       showToast('◈ Sovereign key active');
       return true;
@@ -1108,6 +1120,38 @@ async function unlockWithPRF(){
   }
   showToast('⚠ Running without encryption');
   return false;
+}
+
+window.sessionSovereignKey = null;
+
+function showSovereignKey() {
+  if(!window.sessionSovereignKey) { showToast("Unlock Abyss first"); return; }
+  const b64 = bufToB64(window.sessionSovereignKey);
+  const displayInput = document.getElementById('export-key-display');
+  displayInput.value = b64;
+  displayInput.style.display = 'block';
+  displayInput.select();
+  document.execCommand('copy'); // Auto-copy to clipboard
+  showToast("Key Copied. Guard it with your life.");
+}
+
+async function unlockWithFallbackKey() {
+  const input = document.getElementById('fallback-key-input').value.trim();
+  if(!input) return;
+  try {
+    const buf = b64ToBuf(input);
+    const keyBytes = new Uint8Array(buf);
+    if(keyBytes.length !== 32) throw new Error("Invalid length");
+    
+    window.sessionSovereignKey = keyBytes;
+    await setEncryptionKey(keyBytes);
+    
+    document.getElementById('lock-screen').style.display = 'none';
+    showToast("◈ Abyss Unlocked via Key");
+    await init();
+  } catch(e) {
+    showToast("Invalid Key format");
+  }
 }
 
 /* INIT */
@@ -2513,10 +2557,11 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
             lockScreen.style.display = 'none';
             await init();
           } else {
-            if(confirm("Encryption failed. Enter unencrypted offline mode?")) {
-              lockScreen.style.display = 'none';
-              await init();
-            }
+            // FaceID failed/canceled. Reveal the manual Key Input box!
+            manualBtn.style.display = 'none';
+            document.getElementById('fallback-key-input').style.display = 'block';
+            document.getElementById('btn-fallback-unlock').style.display = 'block';
+            document.getElementById('btn-fallback-unlock').onclick = unlockWithFallbackKey;
           }
         };
       }
