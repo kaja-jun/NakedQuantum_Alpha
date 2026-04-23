@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.21.3</title>
+<title>NakedQuantum v0.21.4</title>
 <style>
 :root {
   --bg: #000000;
@@ -137,8 +137,30 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .extract-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); animation:pulse 1.2s ease infinite; }
 .extract-dot:nth-child(2){animation-delay:0.2s} .extract-dot:nth-child(3){animation-delay:0.4s}
 
-.format-toolbar { display: flex; align-items: center; gap: 4px; padding: 8px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-shrink: 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
-.format-toolbar::-webkit-scrollbar { display: none; }
+/* THE FORMATTING PILL */
+.format-toolbar {
+  margin-top: auto; /* Pushes it to the bottom of the writing space */
+  margin-bottom: 0px; /* The safety buffer to dodge the iOS Home Indicator */
+  background: rgba(10,10,10,0.85);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 8px 16px;
+  border-radius: 24px;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 12px;
+  align-self: center; /* Centers the pill horizontally */
+  max-width: 95vw; /* Prevents bleeding off the screen edges */
+  box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+}
+.format-toolbar::-webkit-scrollbar { 
+  display: none; /* Hide the ugly scrollbar on webkit */
+}
+
 .fmt-btn { background: none; border: 1px solid var(--border); color: var(--muted); font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 7px; white-space: nowrap; flex-shrink: 0; font-family: var(--font-serif); min-width: 32px; text-align: center; }
 .fmt-btn:active { background: var(--surface2); color: var(--accent); border-color: var(--accent-dim); }
 .fmt-btn.code-btn { font-family: 'Menlo', monospace; font-size: 11px; }
@@ -435,7 +457,7 @@ select.cosm-input {
         
         <textarea class="content-textarea" id="content-textarea" placeholder="Begin writing..."></textarea>
         
-        <div class="format-toolbar" id="format-toolbar" style="margin-bottom:0; margin-top:12px; border-top: 1px solid var(--border); border-bottom: none; padding-top: 12px;">
+       <div class="format-toolbar" id="format-toolbar">
           <button class="fmt-btn" id="fmt-bold"><b>B</b></button>
           <button class="fmt-btn" id="fmt-italic"><i>I</i></button>
           <button class="fmt-btn" id="fmt-underline"><u>U</u></button>
