@@ -2100,8 +2100,9 @@ async function callAIForChat(char, history, text) {
   const key = localStorage.getItem("nq_api_key") || "";
   if (!key) { showToast("Add API Key in Settings"); return null; }
 
+  // Fire and forget summarizer (Fixes the 5-second freeze on message 15!)
   if (history.length > 0 && history.length % 15 === 0) {
-    summariseHistory(char.id, history.slice(-15)).catch(e=>console.error(e));
+    summariseHistory(char.id, history.slice(-15)).catch(e => console.error("Summary silent fail", e));
   }
 
   const memoryContext = await getMemoryContext(char.id);
@@ -2123,42 +2124,37 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  // 1. CLEAN
-  const validHistory = history.filter(h => {
-    if (!h || !h.content) return false;
-    const c = String(h.content).trim();
-    if (c === "") return false;
-    return (h.role === 'user' || h.role === 'char' || h.role === 'assistant');
-  });
+  // 1. Grab recent history safely
+  let recent = history.sort((a,b) => (a.created_at || 0) - (b.created_at || 0)).slice(-12);
 
-  // 2. ROBUST SORT (Safely handles old text IDs and exact millisecond collisions)
-  const sortedHistory = validHistory.sort((a, b) => {
-    const tA = a.created_at || 0;
-    const tB = b.created_at || 0;
-    if (tA === tB) return String(a.id).localeCompare(String(b.id)); // Fallback if time is identical
-    return tA - tB;
-  }).slice(-12);
+  // 2. Map to strictly 'user' or 'assistant'
+  let rawMsgs = recent.map(h => ({
+    role: h.role === 'user' ? 'user' : 'assistant',
+    content: (h.content || "...").trim()
+  }));
 
-  // 3. MERGE (Forces strict User -> Assistant alternation)
+  // 3. THE FIX: Merge consecutive messages of the same role
+  // This prevents the "Provider returned error" caused by [User, User] sequences
   let safeMsgs = [];
-  for (const h of sortedHistory) {
-    const role = h.role === 'user' ? 'user' : 'assistant';
-    const content = String(h.content).trim();
-
-    if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === role) {
-      safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
+  for(const m of rawMsgs) {
+    if(safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === m.role) {
+      safeMsgs[safeMsgs.length - 1].content += "\n\n" + m.content;
     } else {
-      safeMsgs.push({ role, content });
+      safeMsgs.push(m);
     }
   }
 
-  // 4. BOUNDARIES (APIs crash if it doesn't start and end with 'user')
-  while (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') safeMsgs.shift();
-  if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') safeMsgs.pop();
+  // 4. Ensure it starts and ends cleanly
+  while(safeMsgs.length > 0 && safeMsgs[0].role !== 'user') safeMsgs.shift();
+  if(safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') safeMsgs.pop();
+  
+  // Fallback if everything got wiped
+  if(safeMsgs.length === 0) safeMsgs.push({ role: 'user', content: text });
 
-  if (safeMsgs.length === 0) safeMsgs.push({ role: 'user', content: text });
-
-  const msgs = [{ role: 'system', content: sys }, ...safeMsgs];
+  const finalPayload = [
+    { role: 'system', content: sys },
+    ...safeMsgs
+  ];
 
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -2171,7 +2167,7 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
       },
       body: JSON.stringify({
         model: localStorage.getItem("nq_model") || "google/gemini-2.0-flash-001",
-        messages: msgs,
+        messages: finalPayload,
         temperature: char.temperature || 1.0
       })
     });
@@ -2179,17 +2175,15 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     const data = await res.json();
     
     if (data.error) {
-      console.error("API Error:", data.error);
-      // Expose the EXACT reason OpenRouter rejected it to the UI
-      const errMsg = data.error.message || "Unknown API error";
-      showToast("API Error: " + errMsg.split('.')[0]); 
+      console.error("OpenRouter API Error:", data.error);
+      showToast("API Refused: " + (data.error.message || "Provider Error"));
       return null;
     }
     
     return data.choices?.[0]?.message?.content || null;
   } catch(err) {
     console.error("Network Crash:", err);
-    showToast("Network Failure. AI could not be reached.");
+    showToast("Network Failure.");
     return null;
   }
 }
