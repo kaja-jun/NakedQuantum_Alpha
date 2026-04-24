@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22.4</title>
+<title>NakedQuantum v0.22.5</title>
 <style>
 :root {
   --bg: #000000;
@@ -391,7 +391,6 @@ select.cosm-input {
 .bar-pill.danger { border-color: var(--danger); }
 
 </style>
-<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.min.js"></script>
 </head>
 <body>
 <canvas id="firefly-canvas"></canvas>
@@ -438,7 +437,7 @@ select.cosm-input {
           <button class="view-toggle-btn active" id="btn-write">✎</button>
           <button class="view-toggle-btn" id="btn-view">ʘ</button>
         </div>
-        <button class="tbtn" id="btn-export-docx">W ↓</button>
+      <button class="tbtn" id="btn-export-html">H ↓</button>
         <button class="tbtn" id="btn-export-md">M ↓</button>
         <button class="tbtn" id="btn-export-pdf">P ↓</button>
         <button class="tbtn gold" id="btn-extract">◈</button>
@@ -1215,6 +1214,13 @@ async function unlockWithFallbackKey() {
 async function init(){
   await _workerReady;
   
+  // Ask iOS nicely to not erase us
+  if(navigator.storage&&navigator.storage.persist){
+    navigator.storage.persist().then(granted=>{
+      if(granted)console.log('◈ Storage persistence granted');
+    });
+  }
+  
   currentMode = 'soup';
   currentView = 'soup';
   currentFolderId = null;
@@ -1227,6 +1233,7 @@ async function init(){
   document.getElementById('input-api-key').value=localStorage.getItem('nq_api_key')||'';
   document.getElementById('input-model').value=localStorage.getItem('nq_model')||'deepseek/deepseek-v4-flash';
 }
+
 
 /*Naked Handle*/
 
@@ -2278,7 +2285,7 @@ function openManagementModal(item){
 async function handleMgmtExport() {
   if(!mgmtItem)return;
   if(mgmtItem.type==='folder') await exportFolderContents(mgmtItem.id);
-  else if(mgmtItem.type==='discourse') await exportDiscourseMarkdown(mgmtItem.id);
+  else if(mgmtItem.type==='discourse') await exportDiscourseHTML(mgmtItem.id);
   else showToast("Cannot export character directly");
   resetToDefaultBar();
 }
@@ -2482,28 +2489,82 @@ function renderContent(raw){
   t=t.replace(/<p><\/p>/g,'');t=t.replace(/<p>%%[A-Z0-9]+%%<\/p>/g,m=>m.slice(3,-4));return t;
 }
 
-async function exportDocx(){
+async function exportHTML(){
   if(!currentDiscourseId)return;
   await saveCurrentDiscourse(true);
   const d=await getDiscourse(currentDiscourseId);
   if(!d)return;
-  const {Document,Packer,Paragraph,TextRun,HeadingLevel}=docx;
-  const lines=(d.raw_text||'').split('\n');
-  const children=[
-    new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun(d.title||'Untitled')]}),
-    new Paragraph({children:[new TextRun(new Date(d.created_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}))]}),
-    new Paragraph({children:[new TextRun('')]}),
-    ...lines.map(l=>new Paragraph({children:[new TextRun(l||'')]}))
-  ];
-  const doc=new Document({sections:[{children}]});
-  const blob=await Packer.toBlob(doc);
+  const tile=await getMosaicTile(currentDiscourseId);
+  let mosaicHtml='';
+  if(tile&&tile.anchors&&tile.anchors.length){
+    mosaicHtml=`<div class="mosaic-block"><div class="mosaic-label">◈ MOSAIC</div><ul>${tile.anchors.map(a=>`<li>${escHtml(a)}</li>`).join('')}</ul></div>`;
+  }
+  const content=renderContent(d.raw_text||'');
+  const date=new Date(d.created_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const html=`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escHtml(d.title||'Discourse')}</title>
+<style>
+  :root{--bg:#000;--surface:#0a0a0a;--border:#1f1f1f;--accent:#c8a050;--accent-dim:#8a6e35;--text:#ccc5b9;--muted:#6b6560;}
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:Georgia,serif;max-width:720px;margin:0 auto;padding:40px 24px 80px;line-height:1.8;}
+  h1{font-size:26px;font-weight:700;border-bottom:1px solid var(--border);padding-bottom:12px;margin:0 0 8px;color:var(--text);}
+  h2{font-size:20px;margin:24px 0 10px;color:var(--text);}
+  h3{font-size:16px;color:var(--accent);margin:18px 0 8px;}
+  p{margin:0 0 14px;}
+  ul,ol{padding-left:22px;margin:10px 0;}
+  li{margin:4px 0;}
+  blockquote{border-left:3px solid var(--accent-dim);padding:4px 0 4px 16px;color:var(--muted);font-style:italic;margin:14px 0;}
+  pre{background:#0d0d0b;border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto;margin:14px 0;}
+  code{font-family:Menlo,monospace;font-size:13px;color:#a0d8a0;}
+  strong{font-weight:700;}
+  em{color:#a09890;font-style:italic;}
+  hr{border:none;border-top:1px solid var(--border);margin:20px 0;}
+  .meta{font-size:11px;letter-spacing:1px;color:var(--muted);margin-bottom:28px;text-transform:uppercase;}
+  .mosaic-block{border-left:2px solid var(--accent-dim);padding:10px 16px;background:rgba(200,160,80,0.04);border-radius:0 8px 8px 0;margin:20px 0;}
+  .mosaic-label{font-size:9px;letter-spacing:3px;color:var(--accent);font-weight:900;text-transform:uppercase;margin-bottom:8px;}
+  .mosaic-block ul{margin:0;padding-left:16px;}
+  .mosaic-block li{font-size:13px;color:var(--text);margin:4px 0;}
+  .nq-watermark{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);font-size:9px;letter-spacing:3px;color:var(--muted);opacity:0.4;text-transform:uppercase;}
+</style>
+</head>
+<body>
+<h1>${escHtml(d.title||'Untitled')}</h1>
+<div class="meta">${escHtml(date)}</div>
+${mosaicHtml}
+${content}
+<div class="nq-watermark">NakedQuantum ◈</div>
+</body>
+</html>`;
+  const blob=new Blob([html],{type:'text/html'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download=`${(d.title||'discourse').replace(/[^a-z0-9]/gi,'_').toLowerCase()}.docx`;
-  a.click();URL.revokeObjectURL(url);
-  showToast('Exported as Word ✓');
+  a.href=url;
+  a.download=`${(d.title||'discourse').replace(/[^a-z0-9]/gi,'_').toLowerCase()}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported as HTML ✓');
 }
-
+async function exportDiscourseHTML(id){
+  const d=await getDiscourse(id);if(!d)return;
+  const tile=await getMosaicTile(id);
+  let mosaicHtml='';
+  if(tile&&tile.anchors&&tile.anchors.length){
+    mosaicHtml=`<div class="mosaic-block"><div class="mosaic-label">◈ MOSAIC</div><ul>${tile.anchors.map(a=>`<li>${escHtml(a)}</li>`).join('')}</ul></div>`;
+  }
+  const content=renderContent(d.raw_text||'');
+  const date=new Date(d.created_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const html=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${escHtml(d.title||'Discourse')}</title><style>:root{--bg:#000;--surface:#0a0a0a;--border:#1f1f1f;--accent:#c8a050;--accent-dim:#8a6e35;--text:#ccc5b9;--muted:#6b6560;}*{box-sizing:border-box;}body{background:var(--bg);color:var(--text);font-family:Georgia,serif;max-width:720px;margin:0 auto;padding:40px 24px 80px;line-height:1.8;}h1{font-size:26px;font-weight:700;border-bottom:1px solid var(--border);padding-bottom:12px;margin:0 0 8px;}h2{font-size:20px;margin:24px 0 10px;}h3{font-size:16px;color:var(--accent);margin:18px 0 8px;}p{margin:0 0 14px;}blockquote{border-left:3px solid var(--accent-dim);padding:4px 0 4px 16px;color:var(--muted);font-style:italic;margin:14px 0;}pre{background:#0d0d0b;border:1px solid var(--border);border-radius:8px;padding:14px;}code{font-family:Menlo,monospace;font-size:13px;color:#a0d8a0;}hr{border:none;border-top:1px solid var(--border);margin:20px 0;}.meta{font-size:11px;letter-spacing:1px;color:var(--muted);margin-bottom:28px;text-transform:uppercase;}.mosaic-block{border-left:2px solid var(--accent-dim);padding:10px 16px;background:rgba(200,160,80,0.04);border-radius:0 8px 8px 0;margin:20px 0;}.mosaic-label{font-size:9px;letter-spacing:3px;color:var(--accent);font-weight:900;text-transform:uppercase;margin-bottom:8px;}.nq-watermark{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);font-size:9px;letter-spacing:3px;color:var(--muted);opacity:0.4;text-transform:uppercase;}</style></head><body><h1>${escHtml(d.title||'Untitled')}</h1><div class="meta">${escHtml(date)}</div>${mosaicHtml}${content}<div class="nq-watermark">NakedQuantum ◈</div></body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`${(d.title||'discourse').replace(/[^a-z0-9]/gi,'_').toLowerCase()}.html`;
+  a.click();URL.revokeObjectURL(url);
+  showToast('Exported ✓');
+}
 
 /* EXPORTS */
 async function exportMarkdown(){if(!currentDiscourseId)return;await saveCurrentDiscourse(true);const d=await getDiscourse(currentDiscourseId);if(!d)return;const tile=await getMosaicTile(currentDiscourseId);let md=`# ${d.title}\n\n`;if(tile&&tile.anchors&&tile.anchors.length)md+=`> **Mosaic**\n${tile.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${(d.title||"discourse").replace(/[^a-z0-9]/gi,"_").toLowerCase()}.md`;a.click();URL.revokeObjectURL(url);showToast("Exported as Markdown");}
@@ -2666,7 +2727,7 @@ initWorker();
   document.getElementById('btn-back-table').addEventListener('click',()=>goBack());
   document.getElementById('btn-write').addEventListener('click',()=>setEditorMode('write'));
   document.getElementById('btn-view').addEventListener('click',()=>setEditorMode('view'));
-document.getElementById('btn-export-docx').addEventListener('click',exportDocx);
+  document.getElementById('btn-export-html').addEventListener('click',exportHTML);
   document.getElementById('btn-export-md').addEventListener('click',exportMarkdown);
   document.getElementById('btn-export-pdf').addEventListener('click',exportPDF);
   document.getElementById('btn-extract').addEventListener('click',extractMemory);
