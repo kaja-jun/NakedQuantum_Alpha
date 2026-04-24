@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22.1</title>
+<title>NakedQuantum v0.22.3</title>
 <style>
 :root {
   --bg: #000000;
@@ -1225,7 +1225,7 @@ async function init(){
   await renderTableView();
   
   document.getElementById('input-api-key').value=localStorage.getItem('nq_api_key')||'';
-  document.getElementById('input-model').value=localStorage.getItem('nq_model')||'google/gemini-2.0-flash-001';
+  document.getElementById('input-model').value=localStorage.getItem('nq_model')||'deepseek/deepseek-v4-flash';
 }
 
 /*Naked Handle*/
@@ -1972,7 +1972,7 @@ async function summariseHistory(charId,messages){
   const key=localStorage.getItem("nq_api_key")||"";
   if(!key||messages.length<6)return null;
   try{
-    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("nq_model")||"google/gemini-2.0-flash-001",max_tokens:300,messages:[{role:"system",content:"Compress this conversation into 5-8 bullet points. Capture emotional tone, key decisions, unresolved tensions, named facts. Ruthlessly concise. No preamble."},{role:"user",content:messages.map(m=>`${m.role}: ${m.content}`).join("\n")}]})});
+    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",max_tokens:300,messages:[{role:"system",content:"Compress this conversation into 5-8 bullet points. Capture emotional tone, key decisions, unresolved tensions, named facts. Ruthlessly concise. No preamble."},{role:"user",content:messages.map(m=>`${m.role}: ${m.content}`).join("\n")}]})});
     const data=await res.json();
     const summary=data.choices?.[0]?.message?.content||null;
     if(summary){
@@ -2109,8 +2109,8 @@ async function callAIForChat(char, history){
   const key=localStorage.getItem("nq_api_key")||"";
   if(!key){showToast("Add API Key in Settings");return null;}
 
-  if(history.length>0&&history.length%15===0){
-    await summariseHistory(char.id,history.slice(-15));
+  if(history.length>=15 && history.length%5===0){
+  summariseHistory(char.id, history.slice(-20)).catch(()=>{});
   }
 
   const memoryContext=await getMemoryContext(char.id);
@@ -2166,7 +2166,7 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
         "X-Title": "NakedQuantum"
       },
       body:JSON.stringify({
-        model:localStorage.getItem("nq_model")||"google/gemini-2.0-flash-001",
+        model:localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",
         messages:msgs,
         temperature:char.temperature||1.0
       })
@@ -2215,6 +2215,7 @@ async function renderVoidView(){
   }
   s.appendChild(list);
 }
+
 function openVoidView() { showPanel('view-void'); renderVoidView(); }
 async function handleRestore(id,type){if(type==='discourse')await restoreDiscourse(id);else await restoreCharacter(id);showToast("Restored ✓");await renderVoidView();}
 async function handlePurge(id,type){if(!confirm("Permanently delete?"))return;if(type==='discourse')await purgeDiscourse(id);else await purgeCharacter(id);showToast("Purged");await renderVoidView();}
@@ -2372,9 +2373,13 @@ async function confirmQuickCapture(){
 
 // 1. Initial State
 let modelHistory = JSON.parse(localStorage.getItem('nq_model_history')) || [
-  'anthropic/claude-3.5-sonnet',
-  'openai/gpt-4o',
-  'google/gemini-2.0-flash-001'
+  'deepseek/deepseek-v3.2',
+  'google/gemini-2.5-flash-lite',
+  'openai/gpt-oss-120b',
+  'google/gemini-3.1-flash-lite-preview',
+  'google/gemini-3-flash-preview',
+  'qwen/qwen3-235b-a22b-2507',
+  'deepseek/deepseek-v4-flash'
 ];
 
 function renderModelSelect() {
@@ -2512,7 +2517,7 @@ async function extractMemory(){
   if(!currentDiscourseId)return;const rawText=document.getElementById("content-textarea").value.trim();if(!rawText||rawText.length<50){showToast("Write more before extracting");return;}
   const key=localStorage.getItem("nexus_v7_key")||localStorage.getItem("nq_api_key")||"";if(!key){showToast("Add OpenRouter key in Settings");return;}
   document.getElementById("extract-loading").classList.add("visible");
-  try{const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("activeModel_v1")||localStorage.getItem("nq_model")||"google/gemini-2.0-flash-001",max_tokens:350,messages:[{role:"system",content:`You are a conceptual anchor extractor. Read the text and return exactly 4-6 anchor phrases. Format: one per line, \"Category: brief anchor phrase\". Categories: Core tension, Open question, Key concept, Hidden assumption, Named force, Recurring image. Reply with ONLY the list.`},{role:"user",content:rawText.slice(0,3000)}]})});
+  try{const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("activeModel_v1")||localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",max_tokens:350,messages:[{role:"system",content:`You are a conceptual anchor extractor. Read the text and return exactly 4-6 anchor phrases. Format: one per line, \"Category: brief anchor phrase\". Categories: Core tension, Open question, Key concept, Hidden assumption, Named force, Recurring image. Reply with ONLY the list.`},{role:"user",content:rawText.slice(0,3000)}]})});
   const data=await res.json();const raw=data.choices?.[0]?.message?.content||"";if(!raw.trim()){showToast("Nothing extracted");return;}
   const anchors=raw.split("\n").map(l=>l.trim()).filter(l=>l.length>3&&!l.startsWith("#"));
   await saveMosaicTile(currentDiscourseId,anchors);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic anchored ◈");
