@@ -1941,22 +1941,31 @@ updatePersonaPill();
 
 }
 
+let isSending = false;
 async function handleChatSend(){
-  const input=document.getElementById('chat-input');
-  const text=input.value.trim();if(!text||!activeCharId)return;
-  input.value='';input.style.height='auto';
+  if(isSending) return;
+  isSending = true;
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if(!text ||!activeCharId){ isSending=false; return; }
+  input.value=''; input.style.height='auto';
   appendChatMessage('user',text);
-  
-  await dbPut('history',{charId:activeCharId,role:'user',content:text,created_at:Date.now()});
-  
-  const char=await getCharacter(activeCharId);
-  const history=await dbGetByIndex('history','charId',activeCharId);
-  const response=await callAIForChat(char,history,text);
-  
+
+  const now = Date.now();
+  await dbPut('history',{charId:activeCharId, role:'user', content:text, created_at: Date.now() + Math.floor(Math.random()*3) });
+
+  const char = await getCharacter(activeCharId);
+  let history = await dbGetByIndex('history','charId',activeCharId);
+  // copy before sort, and force unique timestamps
+  history = history.map(h=>({...h})).sort((a,b)=>a.created_at-b.created_at);
+
+  const response = await callAIForChat(char, history);
+
   if(response){
     appendChatMessage('char',response);
-    await dbPut('history',{charId:activeCharId,role:'char',content:response,created_at:Date.now()});
+    await dbPut('history',{charId:activeCharId, role:'char', content:response, created_at: Date.now() + Math.floor(Math.random()*3) });
   }
+  isSending = false;
 }
 
 async function summariseHistory(charId,messages){
@@ -2124,7 +2133,7 @@ Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
   // 1. FORCE SORT BY TIME (IndexedDB gets messy)
-  const sortedHistory = history.sort((a, b) => a.created_at - b.created_at).slice(-12);
+  const sortedHistory = [...history].sort((a,b)=>a.created_at-b.created_at).slice(-12);
 
   // 2. THE SANITIZER: Collapse consecutive messages to appease Gemini
   let safeMsgs = [];
