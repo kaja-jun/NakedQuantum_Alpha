@@ -2100,7 +2100,6 @@ async function callAIForChat(char, history, text) {
   const key = localStorage.getItem("nq_api_key") || "";
   if (!key) { showToast("Add API Key in Settings"); return null; }
 
-  // Auto-summarise in the background (no await freeze)
   if (history.length > 0 && history.length % 15 === 0) {
     summariseHistory(char.id, history.slice(-15)).catch(e=>console.error(e));
   }
@@ -2124,23 +2123,27 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  // 1. CLEAN: Filter invalid entries
+  // 1. CLEAN
   const validHistory = history.filter(h => {
-    if (!h || typeof h !== 'object') return false;
-    if (!h.content || typeof h.content !== 'string') return false;
-    if (h.content.trim() === "") return false;
+    if (!h || !h.content) return false;
+    const c = String(h.content).trim();
+    if (c === "") return false;
     return (h.role === 'user' || h.role === 'char' || h.role === 'assistant');
   });
 
-  // 2. SORT: Use absolute integer ID to prevent millisecond scrambles
-  const sortedHistory = validHistory.sort((a, b) => parseInt(a.id) - parseInt(b.id)).slice(-12);
+  // 2. ROBUST SORT (Safely handles old text IDs and exact millisecond collisions)
+  const sortedHistory = validHistory.sort((a, b) => {
+    const tA = a.created_at || 0;
+    const tB = b.created_at || 0;
+    if (tA === tB) return String(a.id).localeCompare(String(b.id)); // Fallback if time is identical
+    return tA - tB;
+  }).slice(-12);
 
-  // 3. MERGE: Force strict alternation (User -> Assistant -> User)
+  // 3. MERGE (Forces strict User -> Assistant alternation)
   let safeMsgs = [];
   for (const h of sortedHistory) {
     const role = h.role === 'user' ? 'user' : 'assistant';
-    const content = h.content.trim();
-    if (content === "") continue;
+    const content = String(h.content).trim();
 
     if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === role) {
       safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
@@ -2149,18 +2152,11 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     }
   }
 
-  // 4. BOUNDARIES: APIs crash if it doesn't start and end with 'user'
-  while (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
-    safeMsgs.shift(); // Drop orphaned assistant start
-  }
-  if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') {
-    safeMsgs.pop(); // Drop orphaned assistant end
-  }
+  // 4. BOUNDARIES (APIs crash if it doesn't start and end with 'user')
+  while (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') safeMsgs.shift();
+  if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') safeMsgs.pop();
 
-  // 5. FALLBACK: If array is empty, force the current prompt
-  if (safeMsgs.length === 0) {
-    safeMsgs.push({ role: 'user', content: text });
-  }
+  if (safeMsgs.length === 0) safeMsgs.push({ role: 'user', content: text });
 
   const msgs = [{ role: 'system', content: sys }, ...safeMsgs];
 
@@ -2184,7 +2180,9 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     
     if (data.error) {
       console.error("API Error:", data.error);
-      showToast("API Refused: " + (data.error.message || "Format Error"));
+      // Expose the EXACT reason OpenRouter rejected it to the UI
+      const errMsg = data.error.message || "Unknown API error";
+      showToast("API Error: " + errMsg.split('.')[0]); 
       return null;
     }
     
