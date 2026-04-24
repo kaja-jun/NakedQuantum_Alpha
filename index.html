@@ -2100,8 +2100,10 @@ async function callAIForChat(char, history, text) {
   const key = localStorage.getItem("nq_api_key") || "";
   if (!key) { showToast("Add API Key in Settings"); return null; }
 
+  // FIX 1: Fire and Forget the Summarizer. 
+  // By removing 'await', it runs invisibly in the background without freezing the chat!
   if (history.length > 0 && history.length % 15 === 0) {
-    await summariseHistory(char.id, history.slice(-15));
+    summariseHistory(char.id, history.slice(-15)).catch(e => console.error("Summary silent fail:", e));
   }
 
   const memoryContext = await getMemoryContext(char.id);
@@ -2123,17 +2125,16 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  // 1. Sort securely (SQLite sometimes scrambles without an explicit ORDER BY)
-  const sortedHistory = history.sort((a, b) => (a.created_at || 0) - (b.created_at || 0)).slice(-12);
+  // FIX 2: Sort securely by the SQLite AUTOINCREMENT ID, not milliseconds
+  const sortedHistory = history.sort((a, b) => parseInt(a.id) - parseInt(b.id)).slice(-12);
 
-  // 2. THE SANITIZER: Force Strict Alternation
+  // 3. THE SANITIZER: Force Strict Alternation
   let safeMsgs = [];
   for (const h of sortedHistory) {
     const role = h.role === 'user' ? 'user' : 'assistant';
     const content = h.content ? h.content.trim() : "...";
     if (!content) continue;
 
-    // If consecutive roles match, collapse them into one block
     if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === role) {
        safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
     } else {
@@ -2141,10 +2142,9 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     }
   }
 
-  // 3. First message MUST be 'user' for strict models (Gemini/Claude)
-  if (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
-    safeMsgs.shift(); // Drop the orphaned assistant message
-  }
+  // 4. Force boundaries for strict OpenRouter models
+  if (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') safeMsgs.shift(); 
+  if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') safeMsgs.pop();
 
   const msgs = [{ role: 'system', content: sys }, ...safeMsgs];
 
