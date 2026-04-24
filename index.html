@@ -2100,9 +2100,9 @@ async function callAIForChat(char, history, text) {
   const key = localStorage.getItem("nq_api_key") || "";
   if (!key) { showToast("Add API Key in Settings"); return null; }
 
-  // Auto-summarise at threshold
+  // Auto-summarise in the background (no await freeze)
   if (history.length > 0 && history.length % 15 === 0) {
-    await summariseHistory(char.id, history.slice(-15));
+    summariseHistory(char.id, history.slice(-15)).catch(e=>console.error(e));
   }
 
   const memoryContext = await getMemoryContext(char.id);
@@ -2124,56 +2124,45 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  // ========== SURGICAL FIX START ==========
-  // Filter out ANY invalid history entries before sorting
+  // 1. CLEAN: Filter invalid entries
   const validHistory = history.filter(h => {
-    // Must have content, must be non-empty string, must have valid role
     if (!h || typeof h !== 'object') return false;
     if (!h.content || typeof h.content !== 'string') return false;
     if (h.content.trim() === "") return false;
-    if (h.role !== 'user' && h.role !== 'char' && h.role !== 'assistant') return false;
-    return true;
+    return (h.role === 'user' || h.role === 'char' || h.role === 'assistant');
   });
 
-  // If we lost entries, log it (you can remove this later)
-  if (validHistory.length !== history.length) {
-    console.warn(`🧹 Cleaned history: ${history.length} → ${validHistory.length}`);
-  }
+  // 2. SORT: Use absolute integer ID to prevent millisecond scrambles
+  const sortedHistory = validHistory.sort((a, b) => parseInt(a.id) - parseInt(b.id)).slice(-12);
 
-  // Sort and take last 12
-  const sortedHistory = validHistory.sort((a, b) => (a.created_at || 0) - (b.created_at || 0)).slice(-12);
-
-  // Build safe messages with strict alternation
+  // 3. MERGE: Force strict alternation (User -> Assistant -> User)
   let safeMsgs = [];
   for (const h of sortedHistory) {
-    // Normalise role: 'user' stays 'user', anything else becomes 'assistant'
     const role = h.role === 'user' ? 'user' : 'assistant';
     const content = h.content.trim();
     if (content === "") continue;
 
     if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === role) {
-      // Merge consecutive same-role messages
       safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
     } else {
       safeMsgs.push({ role, content });
     }
   }
 
-  // CRITICAL FIX: Remove any messages before the first user message
+  // 4. BOUNDARIES: APIs crash if it doesn't start and end with 'user'
   while (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
-    safeMsgs.shift();
+    safeMsgs.shift(); // Drop orphaned assistant start
+  }
+  if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') {
+    safeMsgs.pop(); // Drop orphaned assistant end
   }
 
-  // If after cleanup we have NO messages, create a fresh user message with current input
+  // 5. FALLBACK: If array is empty, force the current prompt
   if (safeMsgs.length === 0) {
     safeMsgs.push({ role: 'user', content: text });
   }
-  // ========== SURGICAL FIX END ==========
 
   const msgs = [{ role: 'system', content: sys }, ...safeMsgs];
-
-  // Optional debug log - uncomment if still having issues
-  // console.log("Final messages being sent:", JSON.stringify(msgs, null, 2));
 
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -2194,8 +2183,8 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     const data = await res.json();
     
     if (data.error) {
-      console.error("API Error Dump:", data.error);
-      showToast("API Refused: " + (data.error.message || "Strict Format Error"));
+      console.error("API Error:", data.error);
+      showToast("API Refused: " + (data.error.message || "Format Error"));
       return null;
     }
     
