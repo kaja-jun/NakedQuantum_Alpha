@@ -969,18 +969,25 @@ self.onmessage = async (e) => {
         const enc = await encryptObj(obj);
         db.run("INSERT INTO " + targetStore + "(id, enc) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET enc=excluded.enc", [obj.id, enc]);
       } else {
-        const validCols = tableColumns[store] || [];
-        const keys = Object.keys(obj).filter(k => validCols.includes(k));
-        const vals = keys.map(k => {
-          const v = obj[k];
-          if (v === null) return null;
-          if (typeof v === 'object') return JSON.stringify(v);
-          return v;
-        });
-        const placeholders = keys.map(() => '?').join(',');
-        const updates = keys.filter(k => k !== 'id').map(k => k + "=excluded." + k).join(',');
-        db.run("INSERT INTO " + store + "(" + keys.join(',') + ") VALUES (" + placeholders + ") ON CONFLICT(id) DO UPDATE SET " + updates, vals);
-      }
+  const validCols = tableColumns[store] || [];
+  const keys = Object.keys(obj).filter(k => validCols.includes(k));
+  const vals = keys.map(k => {
+    const v = obj[k];
+    if (v === null) return null;
+    if (typeof v === 'object') return JSON.stringify(v);
+    return v;
+  });
+  const placeholders = keys.map(() => '?').join(',');
+  
+  // History uses AUTOINCREMENT — simple INSERT only
+  if(store === 'history'){
+    db.run("INSERT INTO " + store + "(" + keys.join(',') + ") VALUES (" + placeholders + ")", vals);
+  } else {
+    const updates = keys.filter(k => k !== 'id').map(k => k + "=excluded." + k).join(',');
+    db.run("INSERT INTO " + store + "(" + keys.join(',') + ") VALUES (" + placeholders + ") ON CONFLICT(id) DO UPDATE SET " + updates, vals);
+  }
+}
+
       if(saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(save, 500);
       result = 'ok';
