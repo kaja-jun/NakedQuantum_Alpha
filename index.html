@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.21.4</title>
+<title>NakedQuantum v0.22</title>
 <style>
 :root {
   --bg: #000000;
@@ -715,6 +715,19 @@ select.cosm-input {
       <button onclick="showSovereignKey()" style="background:var(--surface2); color:var(--accent); border:1px solid var(--accent-dim); width:100%; height:40px; border-radius:8px; font-weight:900; font-size:11px;">Reveal & Copy Key</button>
     </div>
     <input type="text" id="export-key-display" class="cosm-input" readonly style="display:none; margin-top:8px; text-align:center; font-family:monospace; font-size:11px; color:#a0d8a0; border-color:#a0d8a0;">
+  </div>
+  <div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Supabase Sync (The Void)</label>
+    <input type="text" id="input-supa-url" class="cosm-input" placeholder="https://xyz.supabase.co" style="margin-top:8px;">
+    <input type="password" id="input-supa-key" class="cosm-input" placeholder="Anon Public Key" style="margin-top:8px;">
+  </div>
+  <div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Akashic Records (Cold Backup)</label>
+    <p style="font-size:10px; color:var(--muted); line-height:1.4; margin:4px 0 8px;">Disaster recovery. This overwrites your local fragments.</p>
+    <div style="display:flex; gap:8px;">
+      <button onclick="backupToAkashic()" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); flex:1; height:40px; border-radius:8px; font-weight:700; font-size:11px;">Push to R2</button>
+      <button onclick="restoreFromAkashic()" style="background:#1a0000; color:var(--danger); border:1px solid #330000; flex:1; height:40px; border-radius:8px; font-weight:900; font-size:11px;">Pull from R2</button>
+    </div>
   </div>
 
   <div class="modal-buttons" style="margin-top:25px;">
@@ -1559,7 +1572,7 @@ function updateHeaderButtons(){
   document.getElementById('hdr-void').onclick=()=>openVoidView();
   document.getElementById('hdr-export').onclick=()=>{showToast('Exporting...');exportJSON();};
   document.getElementById('import-json-input').onchange=e=>importJSON(e);
-  document.getElementById('hdr-sync').onclick=()=>{showToast('Syncing with Akashic...');restoreFromAkashic();};
+  document.getElementById('hdr-sync').onclick = handleSync;
   document.getElementById('hdr-search').onclick=()=>{
     if(currentMode==='soup')openGlobalSearch();
     else openSanctuarySearch();
@@ -2350,6 +2363,8 @@ function removeActiveModel() {
 function openSettingsModal(){
   document.getElementById('input-api-key').value = localStorage.getItem('nq_api_key') || '';
   document.getElementById('input-base-url').value = localStorage.getItem('nq_base_url') || 'https://openrouter.ai/api/v1';
+  document.getElementById('input-supa-url').value = localStorage.getItem('nq_supa_url') || '';
+  document.getElementById('input-supa-key').value = localStorage.getItem('nq_supa_key') || '';
   renderModelSelect();
   document.getElementById('settings-modal').classList.add('visible');
   document.getElementById('cosm-overlay').classList.add('active');
@@ -2527,12 +2542,11 @@ document.getElementById('btn-burn-cancel').addEventListener('click',closeOverlay
 document.getElementById('btn-burn-confirm').addEventListener('click',confirmBurnDisc);
 
 document.getElementById('btn-settings-confirm').addEventListener('click', () => {
-  const k = document.getElementById('input-api-key').value.trim();
-  const u = document.getElementById('input-base-url').value.trim();
-  const m = document.getElementById('input-model').value; 
-  localStorage.setItem('nq_api_key', k);
-  localStorage.setItem('nq_base_url', u);
-  localStorage.setItem('nq_model', m);
+  localStorage.setItem('nq_api_key', document.getElementById('input-api-key').value.trim());
+  localStorage.setItem('nq_base_url', document.getElementById('input-base-url').value.trim());
+  localStorage.setItem('nq_model', document.getElementById('input-model').value); 
+  localStorage.setItem('nq_supa_url', document.getElementById('input-supa-url').value.trim());
+  localStorage.setItem('nq_supa_key', document.getElementById('input-supa-key').value.trim());
 
   closeOverlay();
   showToast("Gateway Solidified");
@@ -2574,6 +2588,105 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
 
   document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){e.preventDefault();if(currentView==='lighthouse')saveCurrentDiscourse();}if(e.key==="Escape"&&currentView==='lighthouse')goBack();if(e.key==="Enter"&&document.getElementById("folder-modal").classList.contains("visible"))confirmNewFolder();if(e.key==="Enter"&&document.getElementById("rename-modal").classList.contains("visible"))confirmRename();if(e.key==="Escape"&&document.getElementById("global-search-modal").classList.contains("visible"))closeGlobalSearch();});
   
+/* SUPABASE DELTA SYNC ENGINE */
+async function getCloudCryptoKey() {
+  if (!window.sessionSovereignKey) throw new Error("Key not loaded");
+  return await crypto.subtle.importKey('raw', window.sessionSovereignKey, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+
+async function encForCloud(obj) {
+  const key = await getCloudCryptoKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return JSON.stringify({iv:Array.from(iv), ct:Array.from(new Uint8Array(ct))});
+}
+
+async function decFromCloud(encStr) {
+  const key = await getCloudCryptoKey();
+  const {iv, ct} = JSON.parse(encStr);
+  const dec = await crypto.subtle.decrypt({name:'AES-GCM', iv: new Uint8Array(iv)}, key, new Uint8Array(ct));
+  return JSON.parse(new TextDecoder().decode(dec));
+}
+
+async function handleSync() {
+  const supaUrl = localStorage.getItem('nq_supa_url');
+  const supaKey = localStorage.getItem('nq_supa_key');
+  if (!supaUrl || !supaKey) { showToast("⚠ Add Supabase keys in Settings"); return; }
+  if (!window.sessionSovereignKey) { showToast("⚠ Unlock Abyss first"); return; }
+
+  showToast("Syncing with the Void...");
+  const syncBtn = document.getElementById('hdr-sync');
+  syncBtn.style.opacity = '0.5';
+
+  try {
+    const lastSync = parseInt(localStorage.getItem('nq_last_sync') || '0');
+    let newLastSync = lastSync;
+    const stores = ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries'];
+    
+    // 1. PULL FROM CLOUD
+    const pullRes = await fetch(`${supaUrl}/rest/v1/nq_sync?user_id=eq.${cosmUserId}&updated_at=gt.${lastSync}`, {
+      headers: { 'apikey': supaKey, 'Authorization': `Bearer ${supaKey}` }
+    });
+    if(!pullRes.ok) throw new Error("Failed to connect to Supabase");
+    const remoteRows = await pullRes.json();
+    
+    for (const row of remoteRows) {
+      if (row.updated_at > newLastSync) newLastSync = row.updated_at;
+      if (row.deleted_at) {
+         await dbDelete(row.store, row.id);
+      } else if (row.data_enc) {
+         const obj = await decFromCloud(row.data_enc);
+         await dbPut(row.store, obj);
+      }
+    }
+
+    // 2. PUSH TO CLOUD
+    const pushPayloads = [];
+    for (const store of stores) {
+       const allItems = await dbGetAll(store);
+       const changed = allItems.filter(i => (i.updated_at || i.created_at || 0) > lastSync || (i.deleted_at || 0) > lastSync);
+       
+       for (const item of changed) {
+         const isDel = item.isDeleted || item.is_deleted;
+         const payload = {
+           id: String(item.id),
+           user_id: cosmUserId,
+           store: store,
+           updated_at: isDel ? item.deleted_at : (item.updated_at || item.created_at || Date.now()),
+           deleted_at: isDel ? item.deleted_at : null,
+           data_enc: isDel ? null : await encForCloud(item)
+         };
+         pushPayloads.push(payload);
+       }
+    }
+
+    if (pushPayloads.length > 0) {
+       const pushRes = await fetch(`${supaUrl}/rest/v1/nq_sync`, {
+         method: 'POST',
+         headers: { 
+            'apikey': supaKey, 
+            'Authorization': `Bearer ${supaKey}`, 
+            'Content-Type': 'application/json', 
+            'Prefer': 'resolution=merge-duplicates' 
+         },
+         body: JSON.stringify(pushPayloads)
+       });
+       if(!pushRes.ok) throw new Error("Failed to push to cloud");
+    }
+
+    localStorage.setItem('nq_last_sync', Date.now().toString());
+    showToast("◈ Abyss Synchronized");
+    
+    if(currentMode === 'soup') await renderTableView();
+    else await renderSanctuaryView();
+
+  } catch (e) {
+    console.error("Sync Error:", e);
+    showToast("⚠ Sync Interrupted");
+  } finally {
+    syncBtn.style.opacity = '1';
+  }
+}
   // Final boot trigger with Gatekeeper
   async function bootApp() {
     const lockScreen = document.getElementById('lock-screen');
