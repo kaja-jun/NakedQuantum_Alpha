@@ -1942,22 +1942,47 @@ updatePersonaPill();
 }
 
 async function handleChatSend(){
-  const input=document.getElementById('chat-input');
-  const text=input.value.trim();if(!text||!activeCharId)return;
-  input.value='';input.style.height='auto';
-  appendChatMessage('user',text);
+  const input=document.getElementById("chat-input");
+  const text=input.value.trim();
+  if(!text || !currentChatChar) return;
+
+  // Clear UI instantly
+  input.value="";
+  input.style.height="auto";
+
+  // 1. Save user message to IndexedDB
+  const userMsg = {
+    id: "msg_"+Date.now(),
+    char_id: currentChatChar.id,
+    role: 'user',
+    content: text,
+    created_at: Date.now()
+  };
+  await dbPut("chat_history", userMsg);
   
-  await dbPut('history',{charId:activeCharId,role:'user',content:text,created_at:Date.now()});
+  // 2. Render to screen immediately
+  await renderChat();
+
+  // 3. Fetch the full history
+  const history = await dbFetch("chat_history", { char_id: currentChatChar.id });
   
-  const char=await getCharacter(activeCharId);
-  const history=await dbGetByIndex('history','charId',activeCharId);
-  const response=await callAIForChat(char,history,text);
+  // 4. Call AI (Notice we do NOT pass 'text' anymore, the DB has it)
+  const aiRes = await callAIForChat(currentChatChar, history);
   
-  if(response){
-    appendChatMessage('char',response);
-    await dbPut('history',{charId:activeCharId,role:'char',content:response,created_at:Date.now()});
+  if(aiRes){
+    const aiMsg = {
+      id: "msg_"+(Date.now()+1),
+      char_id: currentChatChar.id,
+      role: 'assistant',
+      content: aiRes,
+      created_at: Date.now()
+    };
+    await dbPut("chat_history", aiMsg);
+    await renderChat();
+    if(window.triggerDeltaSync) window.triggerDeltaSync();
   }
 }
+
 
 
 async function summariseHistory(charId,messages){
@@ -2096,26 +2121,26 @@ function openPersonaPillSelector(){
 }
 
 
-async function callAIForChat(char, history, text) {
-  const key = localStorage.getItem("nq_api_key") || "";
-  if (!key) { showToast("Add API Key in Settings"); return null; }
+// Notice 'text' is removed from parameters
+async function callAIForChat(char, history){
+  const key=localStorage.getItem("nq_api_key")||"";
+  if(!key){showToast("Add API Key in Settings");return null;}
 
-  // Fire and forget summarizer (Fixes the 5-second freeze on message 15!)
-  if (history.length > 0 && history.length % 15 === 0) {
-    summariseHistory(char.id, history.slice(-15)).catch(e => console.error("Summary silent fail", e));
+  if(history.length>0&&history.length%15===0){
+    await summariseHistory(char.id,history.slice(-15));
   }
 
-  const memoryContext = await getMemoryContext(char.id);
-  const memoryBlock = memoryContext ? `\n\n[MEMORY FRAGMENTS]\n${memoryContext}` : "";
+  const memoryContext=await getMemoryContext(char.id);
+  const memoryBlock=memoryContext?`\n\n[MEMORY FRAGMENTS]\n${memoryContext}`:"";
 
-  const p = getGlobalPersona();
-  const roles = getPersonaRoles();
-  const roleId = chatPersonaOverride || char.player_role_id || null;
-  const assignedRole = roleId ? roles.find(r => r.id === roleId) : null;
+  const p=getGlobalPersona();
+  const roles=getPersonaRoles();
+  const roleId=chatPersonaOverride||char.player_role_id||null;
+  const assignedRole=roleId?roles.find(r=>r.id===roleId):null;
 
-  const personaBlock = `\n\nPlayer is ${p.bio || 'the user'}. ${p.personality ? 'Personality: ' + p.personality + '.' : ''} ${assignedRole ? 'In this encounter they are: ' + assignedRole.description + '.' : ''}`;
+  const personaBlock=`\n\nPlayer is ${p.bio||'the user'}. ${p.personality?'Personality: '+p.personality+'.':''} ${assignedRole?'In this encounter they are: '+assignedRole.description+'.':''}`;
 
-  const sys = `You are ${char.name}. ${char.role}.
+  const sys=`You are ${char.name}. ${char.role}.
 Personality: ${char.personality}.
 Backstory: ${char.backstory}.
 Lore: ${char.lorebook}.
@@ -2124,69 +2149,60 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  // 1. Grab recent history safely
-  let recent = history.sort((a,b) => (a.created_at || 0) - (b.created_at || 0)).slice(-12);
+  // 1. FORCE SORT BY TIME (IndexedDB gets messy)
+  const sortedHistory = history.sort((a, b) => a.created_at - b.created_at).slice(-12);
 
-  // 2. Map to strictly 'user' or 'assistant'
-  let rawMsgs = recent.map(h => ({
-    role: h.role === 'user' ? 'user' : 'assistant',
-    content: (h.content || "...").trim()
-  }));
-
-  // 3. THE FIX: Merge consecutive messages of the same role
-  // This prevents the "Provider returned error" caused by [User, User] sequences
+  // 2. THE SANITIZER: Collapse consecutive messages to appease Gemini
   let safeMsgs = [];
-  for(const m of rawMsgs) {
-    if(safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === m.role) {
-      safeMsgs[safeMsgs.length - 1].content += "\n\n" + m.content;
+  for (const h of sortedHistory) {
+    const role = h.role === 'user' ? 'user' : 'assistant';
+    const content = h.content ? h.content.trim() : "...";
+    if (!content) continue;
+
+    if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === role) {
+       safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
     } else {
-      safeMsgs.push(m);
+       safeMsgs.push({ role, content });
     }
   }
 
-  // 4. Ensure it starts and ends cleanly
-  while(safeMsgs.length > 0 && safeMsgs[0].role !== 'user') safeMsgs.shift();
-  if(safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') safeMsgs.pop();
-  
-  // Fallback if everything got wiped
-  if(safeMsgs.length === 0) safeMsgs.push({ role: 'user', content: text });
+  // 3. Gemini demands the first non-system message be 'user'
+  if (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
+    safeMsgs.shift(); 
+  }
 
-  const finalPayload = [
-    { role: 'system', content: sys },
-    ...safeMsgs
-  ];
+  const msgs=[ {role:'system', content:sys}, ...safeMsgs ];
 
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://nakedquantum.com",
+  try{
+    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{
+        "Authorization":`Bearer ${key}`,
+        "Content-Type":"application/json",
+        "HTTP-Referer": "https://nakedquantum.com", 
         "X-Title": "NakedQuantum"
       },
-      body: JSON.stringify({
-        model: localStorage.getItem("nq_model") || "google/gemini-2.0-flash-001",
-        messages: finalPayload,
-        temperature: char.temperature || 1.0
+      body:JSON.stringify({
+        model:localStorage.getItem("nq_model")||"google/gemini-2.0-flash-001",
+        messages:msgs,
+        temperature:char.temperature||1.0
       })
     });
     
-    const data = await res.json();
-    
-    if (data.error) {
-      console.error("OpenRouter API Error:", data.error);
-      showToast("API Refused: " + (data.error.message || "Provider Error"));
+    const data=await res.json();
+    if(data.error){
+      console.error("API Error:", data.error);
+      showToast("API Refused: " + (data.error.message || "Strict Format Error"));
       return null;
     }
-    
-    return data.choices?.[0]?.message?.content || null;
-  } catch(err) {
-    console.error("Network Crash:", err);
-    showToast("Network Failure.");
+    return data.choices?.[0]?.message?.content||null;
+  }catch(err){
+    console.error(err);
+    showToast("AI network failure.");
     return null;
   }
 }
+
 
 function appendChatMessage(role,text){
   const c=document.getElementById('chat-messages');const m=document.createElement('div');m.className=`chat-msg ${role==='user'?'user':'char'}`;m.textContent=text;c.appendChild(m);c.scrollTop=c.scrollHeight;
