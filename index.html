@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22.3</title>
+<title>NakedQuantum v0.22.4</title>
 <style>
 :root {
   --bg: #000000;
@@ -168,7 +168,7 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 
 .content-textarea { flex: 1; width: 100%; min-height: 320px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 12px; font-size: 15px; line-height: 1.8; outline: none; resize: none; font-family: var(--font-serif); caret-color: var(--accent); -webkit-overflow-scrolling: touch; }
 .content-textarea:focus { border-color: var(--accent-dim); }
-.content-view { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; font-size: 15px; line-height: 1.8; font-family: var(--font-serif); color: var(--text); min-height: 200px; }
+.content-view {display: none;background: var(--surface);border: 1px solid var(--border);border-radius: 12px;padding: 20px;font-size: 15px;line-height: 1.8;font-family: var(--font-serif);color: var(--text);overflow-wrap: break-word;word-break: break-word;}
 .content-view h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin: 0 0 16px; }
 .content-view h2 { font-size: 18px; margin: 20px 0 10px; }
 .content-view h3 { font-size: 15px; color: var(--accent); margin: 16px 0 8px; }
@@ -502,7 +502,7 @@ select.cosm-input {
           <div class="forge-section-content">
             <div class="forge-input-group">
               <span class="forge-label">Name</span>
-              <input class="cosm-input" id="forge-name" placeholder="Character Name...">
+              <input class="cosm-input" id="forge-name" placeholder="Character Name..." autocomplete="off">
             </div>
             <div class="forge-input-group">
               <span class="forge-label">Role / Tagline</span>
@@ -1590,6 +1590,7 @@ function updateHeaderButtons(){
 async function goBack() {
   if (currentView === 'lighthouse' && currentDiscourseId) {
     await saveCurrentDiscourse(true);
+    mosaicCache = {};
   }
   if (!currentFolderId) currentFolderId = null; 
   if (currentMode === 'soup') { 
@@ -2742,11 +2743,15 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
   document.getElementById('btn-chat-clear').addEventListener('click',clearChatHistory);
   document.getElementById('btn-send').addEventListener('click',handleChatSend);
   document.getElementById('chat-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    // let the textarea insert a newline, block any form submit
+    e.stopPropagation();
+    return;
+  }
+  if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
     e.preventDefault();
     handleChatSend();
   }
-  // Enter alone does nothing = default newline in textarea
 });
   document.getElementById('chat-input').addEventListener('input',function(){this.style.height='auto';this.style.height=(this.scrollHeight)+'px';});
 
