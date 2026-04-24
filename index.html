@@ -2100,10 +2100,9 @@ async function callAIForChat(char, history, text) {
   const key = localStorage.getItem("nq_api_key") || "";
   if (!key) { showToast("Add API Key in Settings"); return null; }
 
-  // FIX 1: Fire and Forget the Summarizer. 
-  // By removing 'await', it runs invisibly in the background without freezing the chat!
+  // Auto-summarise at threshold
   if (history.length > 0 && history.length % 15 === 0) {
-    summariseHistory(char.id, history.slice(-15)).catch(e => console.error("Summary silent fail:", e));
+    await summariseHistory(char.id, history.slice(-15));
   }
 
   const memoryContext = await getMemoryContext(char.id);
@@ -2125,28 +2124,56 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  // FIX 2: Sort securely by the SQLite AUTOINCREMENT ID, not milliseconds
-  const sortedHistory = history.sort((a, b) => parseInt(a.id) - parseInt(b.id)).slice(-12);
+  // ========== SURGICAL FIX START ==========
+  // Filter out ANY invalid history entries before sorting
+  const validHistory = history.filter(h => {
+    // Must have content, must be non-empty string, must have valid role
+    if (!h || typeof h !== 'object') return false;
+    if (!h.content || typeof h.content !== 'string') return false;
+    if (h.content.trim() === "") return false;
+    if (h.role !== 'user' && h.role !== 'char' && h.role !== 'assistant') return false;
+    return true;
+  });
 
-  // 3. THE SANITIZER: Force Strict Alternation
+  // If we lost entries, log it (you can remove this later)
+  if (validHistory.length !== history.length) {
+    console.warn(`🧹 Cleaned history: ${history.length} → ${validHistory.length}`);
+  }
+
+  // Sort and take last 12
+  const sortedHistory = validHistory.sort((a, b) => (a.created_at || 0) - (b.created_at || 0)).slice(-12);
+
+  // Build safe messages with strict alternation
   let safeMsgs = [];
   for (const h of sortedHistory) {
+    // Normalise role: 'user' stays 'user', anything else becomes 'assistant'
     const role = h.role === 'user' ? 'user' : 'assistant';
-    const content = h.content ? h.content.trim() : "...";
-    if (!content) continue;
+    const content = h.content.trim();
+    if (content === "") continue;
 
     if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === role) {
-       safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
+      // Merge consecutive same-role messages
+      safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
     } else {
-       safeMsgs.push({ role, content });
+      safeMsgs.push({ role, content });
     }
   }
 
-  // 4. Force boundaries for strict OpenRouter models
-  if (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') safeMsgs.shift(); 
-  if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role !== 'user') safeMsgs.pop();
+  // CRITICAL FIX: Remove any messages before the first user message
+  while (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
+    safeMsgs.shift();
+  }
+
+  // If after cleanup we have NO messages, create a fresh user message with current input
+  if (safeMsgs.length === 0) {
+    safeMsgs.push({ role: 'user', content: text });
+  }
+  // ========== SURGICAL FIX END ==========
 
   const msgs = [{ role: 'system', content: sys }, ...safeMsgs];
+
+  // Optional debug log - uncomment if still having issues
+  // console.log("Final messages being sent:", JSON.stringify(msgs, null, 2));
 
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -2729,7 +2756,13 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
   document.getElementById('btn-chat-edit').addEventListener('click',()=>openCharacterForge(activeCharId));
   document.getElementById('btn-chat-clear').addEventListener('click',clearChatHistory);
   document.getElementById('btn-send').addEventListener('click',handleChatSend);
-  document.getElementById('chat-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleChatSend();}});
+  document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.shiftKey) {
+    e.preventDefault();
+    handleChatSend();
+  }
+  // Enter alone does nothing = default newline in textarea
+});
   document.getElementById('chat-input').addEventListener('input',function(){this.style.height='auto';this.style.height=(this.scrollHeight)+'px';});
 
   const fmtMap={'fmt-bold':{wrap:['**','**']},'fmt-italic':{wrap:['*','*']},'fmt-underline':{wrap:['<u>','</u>']},'fmt-quote':{line:'> '},'fmt-code':{wrap:['`','`']},'fmt-codeblock':{block:'```\n',end:'\n```'},'fmt-divider-line':{insert:'\n---\n'},'fmt-bullet':{line:'- '},'fmt-numbered':{line:'1. '},'fmt-h1':{line:'# '},'fmt-h2':{line:'## '},'fmt-h3':{line:'### '}};
