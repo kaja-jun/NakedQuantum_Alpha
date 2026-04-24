@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22</title>
+<title>NakedQuantum v0.22.1</title>
 <style>
 :root {
   --bg: #000000;
@@ -2101,13 +2101,13 @@ async function callAIForChat(char,history,text){
   const memoryBlock=memoryContext?`\n\n[MEMORY FRAGMENTS]\n${memoryContext}`:"";
 
   const p=getGlobalPersona();
-const roles=getPersonaRoles();
-const roleId=chatPersonaOverride||char.player_role_id||null;
-const assignedRole=roleId?roles.find(r=>r.id===roleId):null;
+  const roles=getPersonaRoles();
+  const roleId=chatPersonaOverride||char.player_role_id||null;
+  const assignedRole=roleId?roles.find(r=>r.id===roleId):null;
 
-const personaBlock=`\n\nPlayer is ${p.bio||'the user'}. ${p.personality?'Personality: '+p.personality+'.':''} ${assignedRole?'In this encounter they are: '+assignedRole.description+'.':''}`;
+  const personaBlock=`\n\nPlayer is ${p.bio||'the user'}. ${p.personality?'Personality: '+p.personality+'.':''} ${assignedRole?'In this encounter they are: '+assignedRole.description+'.':''}`;
 
-const sys=`You are ${char.name}. ${char.role}.
+  const sys=`You are ${char.name}. ${char.role}.
 Personality: ${char.personality}.
 Backstory: ${char.backstory}.
 Lore: ${char.lorebook}.
@@ -2116,15 +2116,44 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  const msgs=[{role:'system',content:sys},...history.slice(-12).map(h=>({role:h.role==='user'?'user':'assistant',content:h.content})),{role:'user',content:text}];
+  // THE FIX: History already contains the new message from the DB save. Do not append it twice.
+  const msgs=[
+    {role:'system',content:sys},
+    ...history.slice(-12).map(h=>({role:h.role==='user'?'user':'assistant',content:h.content}))
+  ];
 
   try{
-    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("nq_model")||"google/gemini-2.0-flash-001",messages:msgs,temperature:char.temperature||1.0})});
+    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{
+        "Authorization":`Bearer ${key}`,
+        "Content-Type":"application/json",
+        "HTTP-Referer": "https://nakedquantum.com", 
+        "X-Title": "NakedQuantum"
+      },
+      body:JSON.stringify({
+        model:localStorage.getItem("nq_model")||"google/gemini-2.0-flash-001",
+        messages:msgs,
+        temperature:char.temperature||1.0
+      })
+    });
+    
     const data=await res.json();
+    
+    // Catch OpenRouter getting mad and show it in the UI
+    if (data.error) {
+      console.error("API Error:", data.error);
+      showToast("API Refused: " + (data.error.message || "Check Console"));
+      return null;
+    }
+    
     return data.choices?.[0]?.message?.content||null;
-  }catch(err){console.error(err);showToast("AI call failed");return null;}
+  }catch(err){
+    console.error(err);
+    showToast("AI call completely failed");
+    return null;
+  }
 }
-
 
 function appendChatMessage(role,text){
   const c=document.getElementById('chat-messages');const m=document.createElement('div');m.className=`chat-msg ${role==='user'?'user':'char'}`;m.textContent=text;c.appendChild(m);c.scrollTop=c.scrollHeight;
