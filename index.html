@@ -2743,15 +2743,11 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
   document.getElementById('btn-chat-clear').addEventListener('click',clearChatHistory);
   document.getElementById('btn-send').addEventListener('click',handleChatSend);
   document.getElementById('chat-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-    // let the textarea insert a newline, block any form submit
-    e.stopPropagation();
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.stopPropagation(); // newline only
     return;
   }
-  if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
-    e.preventDefault();
-    handleChatSend();
-  }
+  // remove the Shift+Enter send entirely if you want button-only
 });
   document.getElementById('chat-input').addEventListener('input',function(){this.style.height='auto';this.style.height=(this.scrollHeight)+'px';});
 
