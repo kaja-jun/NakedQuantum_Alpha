@@ -1942,48 +1942,22 @@ updatePersonaPill();
 }
 
 async function handleChatSend(){
-  const input=document.getElementById("chat-input");
-  const text=input.value.trim();
-  if(!text || !currentChatChar) return;
-
-  // Clear UI instantly
-  input.value="";
-  input.style.height="auto";
-
-  // 1. Save user message to IndexedDB
-  const userMsg = {
-    id: "msg_"+Date.now(),
-    char_id: currentChatChar.id,
-    role: 'user',
-    content: text,
-    created_at: Date.now()
-  };
-  await dbPut("chat_history", userMsg);
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim();if(!text||!activeCharId)return;
+  input.value='';input.style.height='auto';
+  appendChatMessage('user',text);
   
-  // 2. Render to screen immediately
-  await renderChat();
-
-  // 3. Fetch the full history
-  const history = await dbFetch("chat_history", { char_id: currentChatChar.id });
+  await dbPut('history',{charId:activeCharId,role:'user',content:text,created_at:Date.now()});
   
-  // 4. Call AI (Notice we do NOT pass 'text' anymore, the DB has it)
-  const aiRes = await callAIForChat(currentChatChar, history);
+  const char=await getCharacter(activeCharId);
+  const history=await dbGetByIndex('history','charId',activeCharId);
+  const response=await callAIForChat(char,history,text);
   
-  if(aiRes){
-    const aiMsg = {
-      id: "msg_"+(Date.now()+1),
-      char_id: currentChatChar.id,
-      role: 'assistant',
-      content: aiRes,
-      created_at: Date.now()
-    };
-    await dbPut("chat_history", aiMsg);
-    await renderChat();
-    if(window.triggerDeltaSync) window.triggerDeltaSync();
+  if(response){
+    appendChatMessage('char',response);
+    await dbPut('history',{charId:activeCharId,role:'char',content:response,created_at:Date.now()});
   }
 }
-
-
 
 async function summariseHistory(charId,messages){
   const key=localStorage.getItem("nq_api_key")||"";
