@@ -2089,25 +2089,25 @@ function openPersonaPillSelector(){
 }
 
 
-async function callAIForChat(char,history,text){
-  const key=localStorage.getItem("nq_api_key")||"";
-  if(!key){showToast("Add API Key in Settings");return null;}
+async function callAIForChat(char, history, text) {
+  const key = localStorage.getItem("nq_api_key") || "";
+  if (!key) { showToast("Add API Key in Settings"); return null; }
 
-  if(history.length>0&&history.length%15===0){
-    await summariseHistory(char.id,history.slice(-15));
+  if (history.length > 0 && history.length % 15 === 0) {
+    await summariseHistory(char.id, history.slice(-15));
   }
 
-  const memoryContext=await getMemoryContext(char.id);
-  const memoryBlock=memoryContext?`\n\n[MEMORY FRAGMENTS]\n${memoryContext}`:"";
+  const memoryContext = await getMemoryContext(char.id);
+  const memoryBlock = memoryContext ? `\n\n[MEMORY FRAGMENTS]\n${memoryContext}` : "";
 
-  const p=getGlobalPersona();
-  const roles=getPersonaRoles();
-  const roleId=chatPersonaOverride||char.player_role_id||null;
-  const assignedRole=roleId?roles.find(r=>r.id===roleId):null;
+  const p = getGlobalPersona();
+  const roles = getPersonaRoles();
+  const roleId = chatPersonaOverride || char.player_role_id || null;
+  const assignedRole = roleId ? roles.find(r => r.id === roleId) : null;
 
-  const personaBlock=`\n\nPlayer is ${p.bio||'the user'}. ${p.personality?'Personality: '+p.personality+'.':''} ${assignedRole?'In this encounter they are: '+assignedRole.description+'.':''}`;
+  const personaBlock = `\n\nPlayer is ${p.bio || 'the user'}. ${p.personality ? 'Personality: ' + p.personality + '.' : ''} ${assignedRole ? 'In this encounter they are: ' + assignedRole.description + '.' : ''}`;
 
-  const sys=`You are ${char.name}. ${char.role}.
+  const sys = `You are ${char.name}. ${char.role}.
 Personality: ${char.personality}.
 Backstory: ${char.backstory}.
 Lore: ${char.lorebook}.
@@ -2116,41 +2116,59 @@ Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
 
-  // THE FIX: History already contains the new message from the DB save. Do not append it twice.
-  const msgs=[
-    {role:'system',content:sys},
-    ...history.slice(-12).map(h=>({role:h.role==='user'?'user':'assistant',content:h.content}))
-  ];
+  // 1. Sort securely (SQLite sometimes scrambles without an explicit ORDER BY)
+  const sortedHistory = history.sort((a, b) => (a.created_at || 0) - (b.created_at || 0)).slice(-12);
 
-  try{
-    const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
-      method:"POST",
-      headers:{
-        "Authorization":`Bearer ${key}`,
-        "Content-Type":"application/json",
-        "HTTP-Referer": "https://nakedquantum.com", 
+  // 2. THE SANITIZER: Force Strict Alternation
+  let safeMsgs = [];
+  for (const h of sortedHistory) {
+    const role = h.role === 'user' ? 'user' : 'assistant';
+    const content = h.content ? h.content.trim() : "...";
+    if (!content) continue;
+
+    // If consecutive roles match, collapse them into one block
+    if (safeMsgs.length > 0 && safeMsgs[safeMsgs.length - 1].role === role) {
+       safeMsgs[safeMsgs.length - 1].content += "\n\n" + content;
+    } else {
+       safeMsgs.push({ role, content });
+    }
+  }
+
+  // 3. First message MUST be 'user' for strict models (Gemini/Claude)
+  if (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
+    safeMsgs.shift(); // Drop the orphaned assistant message
+  }
+
+  const msgs = [{ role: 'system', content: sys }, ...safeMsgs];
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://nakedquantum.com",
         "X-Title": "NakedQuantum"
       },
-      body:JSON.stringify({
-        model:localStorage.getItem("nq_model")||"google/gemini-2.0-flash-001",
-        messages:msgs,
-        temperature:char.temperature||1.0
+      body: JSON.stringify({
+        model: localStorage.getItem("nq_model") || "google/gemini-2.0-flash-001",
+        messages: msgs,
+        temperature: char.temperature || 1.0
       })
     });
     
-    const data=await res.json();
+    const data = await res.json();
     
-    // Catch OpenRouter getting mad and show it in the UI
     if (data.error) {
-      console.error("API Error:", data.error);
-      showToast("API Refused: " + (data.error.message || "Check Console"));
+      console.error("API Error Dump:", data.error);
+      showToast("API Refused: " + (data.error.message || "Strict Format Error"));
       return null;
     }
     
-    return data.choices?.[0]?.message?.content||null;
-  }catch(err){
-    console.error(err);
-    showToast("AI call completely failed");
+    return data.choices?.[0]?.message?.content || null;
+  } catch(err) {
+    console.error("Network Crash:", err);
+    showToast("Network Failure. AI could not be reached.");
     return null;
   }
 }
