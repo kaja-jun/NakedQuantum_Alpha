@@ -1442,7 +1442,6 @@ function renderDefaultBar(mode) {
   }
 }
 
-
 function enterSelectMode(item){
   selectMode=true;
   selectedItems=new Set();
@@ -1450,7 +1449,6 @@ function enterSelectMode(item){
   if(currentMode==='soup') renderTableView().then(()=>renderSelectBar());
   else renderSanctuaryView().then(()=>renderSelectBar());
 }
-
 
 function renderSelectBar(){
   const count=selectedItems.size;
@@ -1486,7 +1484,6 @@ function exitSelectMode(){
   else renderSanctuaryView();
   renderDefaultBar(currentMode);
 }
-
 
 function toggleSelectItem(id){
   if(selectedItems.has(id))selectedItems.delete(id);
@@ -1539,7 +1536,6 @@ async function batchBurn(){
   await openBurnDiscModal();
 }
 
-
 /* LONG PRESS WORDMARK */
 let wpt=null;
 const wEl=document.getElementById('nq-wordmark');
@@ -1576,7 +1572,6 @@ function showPanel(id){
   firefly.sd(id==='view-lighthouse'||id==='view-chat'?80:20);
 }
 
-
 /* HEADER BUTTONS */
 function updateHeaderButtons(){
   const c=document.getElementById('header-actions');
@@ -1591,7 +1586,6 @@ function updateHeaderButtons(){
     else openSanctuarySearch();
   };
 }
-
 
 async function goBack() {
   if (currentView === 'lighthouse' && currentDiscourseId) {
@@ -1608,7 +1602,6 @@ async function goBack() {
   }
 }
 
-
 function openSanctuarySearch(){
   const modal=document.getElementById('global-search-modal');
   document.getElementById('global-search-input').placeholder='Search characters...';
@@ -1617,7 +1610,6 @@ function openSanctuarySearch(){
   modal.classList.add('visible');
   document.getElementById('cosm-overlay').classList.add('active');
 }
-
 
 async function renderTableView() {
   const surface = document.getElementById('table-surface');
@@ -1700,7 +1692,6 @@ async function renderTableView() {
   }
 }
 
-
 async function buildDiscourseCard(d){
   const tile = await getMosaicTile(d.id), hasMosaic = tile && tile.anchors && tile.anchors.length > 0;
   const date = new Date(d.updated_at||d.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric"});
@@ -1730,7 +1721,6 @@ async function buildDiscourseCard(d){
   return card;
 }
 
-
 /* BREADCRUMB */
 function renderBreadcrumb(){
   const bar=document.getElementById('breadcrumb-bar');bar.innerHTML='';
@@ -1752,13 +1742,11 @@ function enterFolder(id, name){
   renderTableView();
 }
 
-
 function navToBc(idx){
   breadcrumbPath=breadcrumbPath.slice(0,idx+1);
   currentFolderId=breadcrumbPath[breadcrumbPath.length-1].id;
   renderTableView();
 }
-
 
 async function openDiscourse(id){
   if(currentDiscourseId&&id!==currentDiscourseId)await saveCurrentDiscourse(true);
@@ -1845,7 +1833,6 @@ async function deleteCurrentDiscourse() {
   showToast("Moved to Void ◌");
 }
 
-
 /* SANCTUARY */
 async function renderSanctuaryView(){
   const surface=document.getElementById('sanctuary-surface');surface.innerHTML='';
@@ -1904,7 +1891,6 @@ roles.forEach(r=>{
   if(r.id===c.player_role_id)o.selected=true;
   roleSel.appendChild(o);
 });
-
 }
 
 async function saveCharacterForge(){
@@ -1945,7 +1931,6 @@ async function openChat(id){
   showPanel('view-chat');
 chatPersonaOverride=c.player_role_id||null;
 updatePersonaPill();
-
 }
 
 let isSending = false;
@@ -1971,12 +1956,11 @@ async function handleChatSend(){
 
   if(response){
     appendChatMessage('char',response);
-    const userMsgId = 'h_' + crypto.randomUUID();
+    const aiMsgId = 'h_' + crypto.randomUUID();
     await dbPut('history', { id: aiMsgId, charId: activeCharId, role: 'char', content: response, created_at: now+1 });
   }
   isSending = false;
 }
-
 
 async function summariseHistory(charId,messages){
   const key=localStorage.getItem("nq_api_key")||"";
@@ -2113,7 +2097,6 @@ function openPersonaPillSelector(){
   document.getElementById('cosm-overlay').classList.add('active');
 }
 
-
 // Notice 'text' is removed from parameters
 async function callAIForChat(char, history){
   const key=localStorage.getItem("nq_api_key")||"";
@@ -2196,7 +2179,6 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
   }
 }
 
-
 function appendChatMessage(role,text){
   const c=document.getElementById('chat-messages');const m=document.createElement('div');m.className=`chat-msg ${role==='user'?'user':'char'}`;m.textContent=text;c.appendChild(m);c.scrollTop=c.scrollHeight;
 }
@@ -2204,7 +2186,6 @@ function appendChatMessage(role,text){
 async function clearChatHistory(){if(!activeCharId||!confirm("Clear chat history?"))return;const h=await dbGetByIndex('history','charId',activeCharId);for(const x of h)await dbDelete('history',x.id);document.getElementById('chat-messages').innerHTML='';showToast("History cleared");}
 
 /* VOID */
-
 function closeVoidView(){goBack();}
 async function renderVoidView(){
   const s=document.getElementById('void-surface');s.innerHTML='';
@@ -2326,7 +2307,6 @@ async function confirmRename(){
   resetToDefaultBar();
   showToast("Renamed");
 }
-
 
 /* MOVE */
 function openMoveModal(){
@@ -2550,6 +2530,7 @@ ${content}
   URL.revokeObjectURL(url);
   showToast('Exported as HTML ✓');
 }
+
 async function exportDiscourseHTML(id){
   const d=await getDiscourse(id);if(!d)return;
   const tile=await getMosaicTile(id);
@@ -2588,6 +2569,7 @@ async function extractMemory(){
   }catch(err){console.error(err);showToast("Extraction failed");}
   finally{document.getElementById("extract-loading").classList.remove("visible");}
 }
+
 async function confirmDeleteMosaic(){if(!currentDiscourseId)return;if(!confirm("Clear mosaic anchors?"))return;await deleteMosaicTile(currentDiscourseId);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic cleared");}
 
 /* AKASHIC */
@@ -2617,7 +2599,6 @@ function cancelLP(card){
   longPressConsumed=false;
   if(card)card.classList.remove('long-pressing');
 }
-
 
 /* TOAST & UTILS */
 function showToast(msg){const t=document.getElementById("cosm-toast");t.textContent=msg;t.style.opacity="1";clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity="0";},2200);}
@@ -2721,6 +2702,7 @@ async function handleSync() {
     syncBtn.style.opacity = '1';
   }
 }
+
 /* EVENT BINDING */
 document.addEventListener('DOMContentLoaded',()=> {
 initWorker();
