@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22.7</title>
+<title>NakedQuantum v0.22.8</title>
 <style>
 :root {
   --bg: #000000;
@@ -608,7 +608,7 @@ select.cosm-input {
 <div class="view-panel hidden" id="view-memory" style="background:var(--bg);display:flex;flex-direction:column;">
   <div class="lighthouse-nav">
     <button class="btn-back-table" id="btn-memory-back">← Chat</button>
-    <div style="font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:900;">◈ MEMORY VAULT</div>
+    <div style="font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:900;">▣ MEMORY VAULT</div>
     <button class="tbtn gold" id="btn-add-manual-memory">+ Anchor</button>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 100px;">
@@ -619,7 +619,7 @@ select.cosm-input {
 <div class="view-panel hidden" id="view-persona" style="background:var(--bg);display:flex;flex-direction:column;">
   <div class="lighthouse-nav">
     <button class="btn-back-table" id="btn-persona-back">← Sanctuary</button>
-    <div style="font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:900;">◈ PERSONA</div>
+    <div style="font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:900;">⁂ PERSONA</div>
     <button class="tbtn gold" id="btn-save-persona">Save</button>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 100px;">
@@ -735,19 +735,19 @@ select.cosm-input {
   </div>
 </div>
 <div class="cosm-modal" id="burn-disc-modal">
-  <div class="modal-title">🔥 Burn Disc</div>
+  <div class="modal-title">⌬ Engram</div>
   <div style="font-size:11px;color:var(--muted);">Character</div>
   <select class="cosm-select" id="burn-char-select"></select>
   <div style="font-size:11px;color:var(--muted);">Drop into folder</div>
   <select class="cosm-select" id="burn-folder-select"></select>
   <div class="modal-buttons">
     <button class="modal-btn-cancel" id="btn-burn-cancel">Cancel</button>
-    <button class="modal-btn-confirm" id="btn-burn-confirm">Burn 🔥</button>
+    <button class="modal-btn-confirm" id="btn-burn-confirm">⌬ Engram</button>
   </div>
 </div>
 
 <div class="cosm-modal" id="persona-select-modal">
-  <div class="modal-title">◈ Your Role Here</div>
+  <div class="modal-title">⁂ Your Role Here</div>
   <div class="management-actions" id="persona-select-list"></div>
   <div class="modal-buttons">
     <button class="modal-btn-cancel" id="btn-persona-select-cancel">Cancel</button>
@@ -756,7 +756,7 @@ select.cosm-input {
 
 
 <div class="cosm-modal" id="role-modal">
-  <div class="modal-title">◈ New Role</div>
+  <div class="modal-title">⁂ New Role</div>
   <input class="cosm-input" id="role-name-input" placeholder="Role name (e.g. Philosopher, Young Kaja)..." maxlength="60">
   <textarea class="cosm-input" id="role-desc-input" placeholder="Describe this role..." style="min-height:100px;resize:none;font-family:Georgia,serif;line-height:1.7;font-size:15px;"></textarea>
   <div class="modal-buttons">
@@ -1320,7 +1320,7 @@ async function confirmBurnDisc(){
   const lastBurn=parseInt(localStorage.getItem('lastBurn_'+charId)||'0');
   const newMessages=history.filter(h=>(h.created_at||0)>lastBurn);
   if(!newMessages.length){
-    showToast("No new chapters since last burn ◈");
+    showToast("No new chapters since last burn ⊹");
     closeOverlay();return;
   }
   const raw_text=newMessages.map(h=>
@@ -1427,9 +1427,9 @@ function renderDefaultBar(mode) {
     // 4 PILLS: THE ARCHIVE QUAD
     showBottomBar([
       { icon: '▤', label: 'Folder', action: () => openFolderModal() },
-      { icon: '✦', label: 'Discourse', action: () => handleNewDiscourse() },
-      { icon: '⚡', label: 'Capture', action: () => openQuickCapture() },
-      { icon: '🔥', label: 'Burn Disc', action: () => openBurnDiscModal() }
+      { icon: '☆', label: 'Discourse', action: () => handleNewDiscourse() },
+      { icon: '✧', label: 'Spark', action: () => openQuickCapture() },
+      { icon: '⌬', label: 'Engram', action: () => openBurnDiscModal() }
     ]);
   } else {
     // 4 PILLS: THE ENTITY QUAD
@@ -1470,7 +1470,7 @@ function renderSelectBar(){
     showBottomBar([
       {icon:`${count}`,label:'Selected',action:()=>{}},
       {icon:'▤',label:'Move',action:()=>batchMove()},
-      {icon:'🔥',label:'Burn',action:()=>batchBurn()},
+      {icon:'⌬',label:'Burn',action:()=>batchBurn()},
       {icon:'✕',label:'Delete',action:()=>batchDelete(),style:'danger'},
       {icon:'✗',label:'Cancel',action:()=>exitSelectMode()},
     ]);
