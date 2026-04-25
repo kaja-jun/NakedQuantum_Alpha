@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22.5</title>
+<title>NakedQuantum v0.22.6</title>
 <style>
 :root {
   --bg: #000000;
@@ -166,7 +166,7 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .fmt-btn.code-btn { font-family: 'Menlo', monospace; font-size: 11px; }
 .fmt-divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
 
-.content-textarea { flex: 1; width: 100%; min-height: 320px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 12px; font-size: 15px; line-height: 1.8; outline: none; resize: none; font-family: var(--font-serif); caret-color: var(--accent); -webkit-overflow-scrolling: touch; }
+.content-textarea { flex: 1; width: 100%; min-height: unset; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 12px; font-size: 15px; line-height: 1.8; outline: none; resize: none; font-family: var(--font-serif); caret-color: var(--accent); -webkit-overflow-scrolling: touch; }
 .content-textarea:focus { border-color: var(--accent-dim); }
 .content-view {display: none;background: var(--surface);border: 1px solid var(--border);border-radius: 12px;padding: 20px;font-size: 15px;line-height: 1.8;font-family: var(--font-serif);color: var(--text);overflow-wrap: break-word;word-break: break-word;}
 .content-view h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin: 0 0 16px; }
@@ -804,7 +804,8 @@ function savePersonaRoles(roles){
 class FF{constructor(){this.canvas=document.getElementById('firefly-canvas');this.ctx=this.canvas.getContext('2d');this.p=[];this.d=15;this.r();window.addEventListener('resize',()=>this.r());this.a();}r(){this.canvas.width=innerWidth;this.canvas.height=innerHeight;}sd(l){this.d=Math.min(60,15+Math.floor(l/200));}a(){this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);while(this.p.length<this.d)this.p.push({x:Math.random()*this.canvas.width,y:Math.random()*this.canvas.height,s:Math.random()*1.5+.2,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,a:Math.random()*.4+.1,p:Math.random()*.01+.002});if(this.p.length>this.d)this.p.splice(this.d);this.p.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.a+=p.p;if(p.a>.6||p.a<.1)p.p*=-1;if(p.x<0)p.x=this.canvas.width;if(p.x>this.canvas.width)p.x=0;if(p.y<0)p.y=this.canvas.height;if(p.y>this.canvas.height)p.y=0;this.ctx.beginPath();this.ctx.arc(p.x,p.y,p.s,0,Math.PI*2);this.ctx.fillStyle=`rgba(200,160,80,${p.a})`;this.ctx.fill();});requestAnimationFrame(()=>this.a());}}
 const firefly=new FF();
 
-/* DB — ABYSS-PROOF WORKER (NULL FIXED) */
+/* DB — ABYSS-PROOF WORKER (NULL FIXED)- Nuclear fix 
+Auto increment Time-bomb & PUT code endless echo */
 const WORKER_CODE = `
 importScripts('https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js');
 let db = null;
@@ -817,16 +818,30 @@ async function initSql() {
   const existing = await loadFromOPFS();
   db = existing ? new SQL.Database(existing) : new SQL.Database();
   
+  // THE PURGE: We must destroy the old integer-based tables to rebuild them as TEXT
+  // ONE-TIME MIGRATION: only drop if still old INTEGER schema
+try {
+  const info = db.exec("PRAGMA table_info(history)");
+  if (info.length) {
+    const idCol = info[0].values.find(v => v[1] === 'id');
+    if (idCol && idCol[2] === 'INTEGER') {
+      db.run("DROP TABLE IF EXISTS history");
+      db.run("DROP TABLE IF EXISTS summaries");
+    }
+  }
+} catch(e) {}
+
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders(id TEXT PRIMARY KEY, name TEXT, parent_id TEXT, created_at INTEGER, updated_at INTEGER, is_deleted INTEGER DEFAULT 0)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses(id TEXT PRIMARY KEY, title TEXT, raw_text TEXT, folder_id TEXT, source_link TEXT, item_type TEXT, tags TEXT, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS characters(id TEXT PRIMARY KEY, name TEXT, role TEXT, backstory TEXT, personality TEXT, lorebook TEXT, scenario TEXT, inclination TEXT, relationships TEXT, pc_info TEXT, player_role_id TEXT, image TEXT, temperature REAL DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
-  db.run("CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY AUTOINCREMENT, charId TEXT, role TEXT, content TEXT, created_at INTEGER)");
+  
+  // THE FIX: History and Summaries now use TEXT IDs (UUID/Timestamps)
+  db.run("CREATE TABLE IF NOT EXISTS history(id TEXT PRIMARY KEY, charId TEXT, role TEXT, content TEXT, created_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS summaries(id TEXT PRIMARY KEY, charId TEXT, text TEXT, type TEXT, created_at INTEGER)");
   
-  // ADDED MISSING TABLES
   db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles(id TEXT PRIMARY KEY, discourse_id TEXT, anchors TEXT, created_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks(id TEXT PRIMARY KEY, discourse_id TEXT, char_name TEXT, created_at INTEGER)");
-  // Encrypted shadow tables
+  
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS characters_enc(id TEXT PRIMARY KEY, enc TEXT)");
@@ -834,7 +849,6 @@ async function initSql() {
   db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks_enc(id TEXT PRIMARY KEY, enc TEXT)");
 
-  // ADDED TO ARRAY
   ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks'].forEach(t => {
     try {
       const info = db.exec("PRAGMA table_info(" + t + ")");
@@ -842,9 +856,7 @@ async function initSql() {
     } catch(e) {}
   });
 
-  // Purge the physical 'root' folder
   db.run("DELETE FROM cosm_folders WHERE id='root'");
-  
   await save();
 }
 
@@ -861,14 +873,11 @@ async function save() {
     const data = db.export();
     const root = await navigator.storage.getDirectory();
     const fh = await root.getFileHandle('nq.db', { create: true });
-    
     try {
-      // Standard Chrome/Desktop approach
       const writable = await fh.createWritable();
       await writable.write(data);
       await writable.close();
     } catch (err) {
-      // Apple iOS / Safari strictly requires this approach in workers
       const accessHandle = await fh.createSyncAccessHandle();
       accessHandle.write(data);
       accessHandle.flush();
@@ -928,28 +937,23 @@ self.onmessage = async (e) => {
       return;
     }
 
-    if (action === 'CLEAR_KEY') {
-      encKey = null;
-      self.postMessage({ id, result: 'key_cleared' });
-      return;
-    }
+    if (action === 'CLEAR_KEY') { encKey = null; self.postMessage({ id, result: 'key_cleared' }); return; }
 
-    const isEnc = encKey && store !== 'history';
+    // THE FIX: History gets encrypted now too for absolute privacy
+    const isEnc = encKey; 
     const targetStore = isEnc ? (store + "_enc") : store;
 
     let result = null;
     if (action === 'GET_ALL') {
       const rows = toObjects(db.exec("SELECT * FROM " + targetStore));
-      if (isEnc) {
-        result = await Promise.all(rows.map(async r => r.enc ? await decryptObj(r.enc) : r));
-      } else { result = rows; }
+      if (isEnc) { result = await Promise.all(rows.map(async r => r.enc ? await decryptObj(r.enc) : r)); } 
+      else { result = rows; }
     }
     else if (action === 'GET') {
       const res = db.exec("SELECT * FROM " + targetStore + " WHERE id=?", [data.id]);
       const row = res.length ? toObjects(res)[0] : null;
-      if (isEnc && row && row.enc) {
-        result = await decryptObj(row.enc);
-      } else { result = row; }
+      if (isEnc && row && row.enc) { result = await decryptObj(row.enc); } 
+      else { result = row; }
     }
     else if (action === 'GET_BY_INDEX') {
       if (isEnc) {
@@ -968,24 +972,20 @@ self.onmessage = async (e) => {
         const enc = await encryptObj(obj);
         db.run("INSERT INTO " + targetStore + "(id, enc) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET enc=excluded.enc", [obj.id, enc]);
       } else {
-  const validCols = tableColumns[store] || [];
-  const keys = Object.keys(obj).filter(k => validCols.includes(k));
-  const vals = keys.map(k => {
-    const v = obj[k];
-    if (v === null) return null;
-    if (typeof v === 'object') return JSON.stringify(v);
-    return v;
-  });
-  const placeholders = keys.map(() => '?').join(',');
-  
-  // History uses AUTOINCREMENT — simple INSERT only
-  if(store === 'history'){
-    db.run("INSERT INTO " + store + "(" + keys.join(',') + ") VALUES (" + placeholders + ")", vals);
-  } else {
-    const updates = keys.filter(k => k !== 'id').map(k => k + "=excluded." + k).join(',');
-    db.run("INSERT INTO " + store + "(" + keys.join(',') + ") VALUES (" + placeholders + ") ON CONFLICT(id) DO UPDATE SET " + updates, vals);
-  }
-}
+        const validCols = tableColumns[store] || [];
+        const keys = Object.keys(obj).filter(k => validCols.includes(k));
+        const vals = keys.map(k => {
+          const v = obj[k];
+          if (v === null) return null;
+          if (typeof v === 'object') return JSON.stringify(v);
+          return v;
+        });
+        const placeholders = keys.map(() => '?').join(',');
+        const updates = keys.filter(k => k !== 'id').map(k => k + "=excluded." + k).join(',');
+        
+        // THE FIX: ON CONFLICT UPDATE restored for history
+        db.run("INSERT INTO " + store + "(" + keys.join(',') + ") VALUES (" + placeholders + ") ON CONFLICT(id) DO UPDATE SET " + updates, vals);
+      }
 
       if(saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(save, 500);
@@ -1001,7 +1001,6 @@ self.onmessage = async (e) => {
   } catch(err) { self.postMessage({ id, error: err.message }); }
 };
 `;
-
 
 let _id = 0;
 const _pending = {};
@@ -1960,21 +1959,24 @@ async function handleChatSend(){
   appendChatMessage('user',text);
 
   const now = Date.now();
-  await dbPut('history',{charId:activeCharId, role:'user', content:text, created_at: Date.now() + Math.floor(Math.random()*3) });
+  // THE FIX: Generating a highly unique string ID to prevent sync collisions
+  const userMsgId = 'h_' + crypto.randomUUID();
+  await dbPut('history', { id: userMsgId, charId: activeCharId, role: 'user', content: text, created_at: now });
 
   const char = await getCharacter(activeCharId);
   let history = await dbGetByIndex('history','charId',activeCharId);
-  // copy before sort, and force unique timestamps
   history = history.map(h=>({...h})).sort((a,b)=>a.created_at-b.created_at);
 
   const response = await callAIForChat(char, history);
 
   if(response){
     appendChatMessage('char',response);
-    await dbPut('history',{charId:activeCharId, role:'char', content:response, created_at: Date.now() + Math.floor(Math.random()*3) });
+    const userMsgId = 'h_' + crypto.randomUUID();
+    await dbPut('history', { id: aiMsgId, charId: activeCharId, role: 'char', content: response, created_at: now+1 });
   }
   isSending = false;
 }
+
 
 async function summariseHistory(charId,messages){
   const key=localStorage.getItem("nq_api_key")||"";
