@@ -1336,7 +1336,7 @@ async function confirmBurnDisc(){
   await createDiscourse({title,raw_text,folder_id:folderId});
   localStorage.setItem('lastBurn_'+charId,Date.now().toString());
   closeOverlay();
-  showToast(`🔥 Burned — ${newMessages.length} chapters`);
+  showToast(`⌬ Engramed — ${newMessages.length} chapters`);
 }
 
 /* PERSONA FUNCTIONS */
@@ -1401,7 +1401,7 @@ function savePersonaPage(){
   const bio=document.getElementById('persona-bio').value.trim();
   const personality=document.getElementById('persona-personality').value.trim();
   saveGlobalPersona(bio,personality);
-  showToast('Persona solidified ◈');
+  showToast('Persona solidified ◆');
 }
 
 /* BOTTOM BAR */
@@ -1428,7 +1428,7 @@ function renderDefaultBar(mode) {
     showBottomBar([
       { icon: '▤', label: 'Folder', action: () => openFolderModal() },
       { icon: '☆', label: 'Discourse', action: () => handleNewDiscourse() },
-      { icon: '✧', label: 'Spark', action: () => openQuickCapture() },
+      { icon: '⌇', label: 'Spark', action: () => openQuickCapture() },
       { icon: '⌬', label: 'Engram', action: () => openBurnDiscModal() }
     ]);
   } else {
@@ -1436,7 +1436,7 @@ function renderDefaultBar(mode) {
     showBottomBar([
       { icon: '+', label: 'Character', action: () => handleNewCharacter() },
       { icon: '⚿', label: 'Forge', action: () => openCharacterForge() },
-      { icon: '◈', label: 'Persona', action: () => openPersonaView() },
+      { icon: '⁂', label: 'Persona', action: () => openPersonaView() },
       { icon: '⏀', label: 'Settings', action: () => openSettingsModal() }
     ]);
   }
