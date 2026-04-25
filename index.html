@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22.6</title>
+<title>NakedQuantum v0.22.7</title>
 <style>
 :root {
   --bg: #000000;
@@ -2636,7 +2636,7 @@ async function handleSync() {
   try {
     const lastSync = parseInt(localStorage.getItem('nq_last_sync') || '0');
     let newLastSync = lastSync;
-    const stores = ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries'];
+    const stores = ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks'];
     
     // 1. PULL FROM CLOUD
     const pullRes = await fetch(`${supaUrl}/rest/v1/nq_sync?user_id=eq.${cosmUserId}&updated_at=gt.${lastSync}`, {
