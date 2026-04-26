@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.22.8</title>
+<title>NakedQuantum v0.23</title>
 <style>
 :root {
   --bg: #000000;
@@ -120,6 +120,42 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .discourse-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
 .meta-separator { opacity: 0.3; }
 .source-link { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 10px; padding: 3px 8px; border: 1px solid var(--accent-dim); border-radius: 6px; background: rgba(200,160,80,0.06); text-decoration: none; }
+
+/* THE GOLD LINE */
+#gold-line-zone {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 30px;
+  z-index: 500; opacity: 0; pointer-events: none;
+  transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#gold-line-zone.awake {
+  opacity: 1; pointer-events: auto;
+}
+.gold-thread {
+  position: absolute; top: 20px; bottom: 100px; left: 12px; width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--accent), var(--accent-dim), transparent);
+  box-shadow: 0 0 10px rgba(200, 160, 80, 0.2);
+  transform-origin: top;
+}
+.gold-thread.wobble {
+  animation: threadWobble 0.6s ease-out;
+}
+.gold-tick {
+  position: absolute; left: 9px; width: 7px; height: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 5px var(--accent);
+  transition: top 0.4s ease;
+}
+.gold-tick.current { width: 11px; left: 5px; height: 2px; }
+
+@keyframes threadWobble {
+  0% { transform: scaleX(1) translateX(0); }
+  25% { transform: scaleX(1.5) translateX(2px); }
+  50% { transform: scaleX(0.8) translateX(-1px); }
+  75% { transform: scaleX(1.1) translateX(0.5px); }
+  100% { transform: scaleX(1) translateX(0); }
+}
+/* Optional: Hide the old breadcrumb bar to fully embrace the descent */
+/* .breadcrumb-bar { display: none !important; } */
 
 .mosaic-block { border-left: 2px solid var(--accent-dim); padding: 10px 14px; background: rgba(200,160,80,0.04); border-radius: 0 8px 8px 0; }
 .mosaic-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -411,6 +447,21 @@ select.cosm-input {
 
 <div class="view-host">
   <div class="view-panel soup-view" id="view-soup">
+    <div class="view-panel soup-view" id="view-soup">
+    
+    <!-- INJECT THE GOLD LINE HERE -->
+    <div id="gold-line-zone">
+      <div class="gold-thread" id="gold-thread"></div>
+      <div id="gold-ticks-container"></div>
+    </div>
+
+    <div class="breadcrumb-bar" id="breadcrumb-bar"></div>
+    <div class="search-bar-wrap" id="search-bar-wrap" style="display:none;">
+      <input class="search-input" id="search-input" placeholder="Search discourses...">
+    </div>
+    <div class="table-surface" id="table-surface"></div>
+  </div>
+  <div id="gold-line-trigger" style="position:absolute;top:0;bottom:0;left:0;width:20px;z-index:501;"></div>
     <div class="breadcrumb-bar" id="breadcrumb-bar"></div>
     <div class="search-bar-wrap" id="search-bar-wrap" style="display:none;">
       <input class="search-input" id="search-input" placeholder="Search discourses...">
@@ -1735,17 +1786,67 @@ function renderBreadcrumb(){
   });
 }
 
+/* THE GOLD LINE LOGIC */
+let threadSleepTimer = null;
+
+function awakenGoldLine() {
+  const zone = document.getElementById('gold-line-zone');
+  const thread = document.getElementById('gold-thread');
+  if (!zone || currentMode !== 'soup') return;
+
+  // Only wobble if it was fully asleep
+  if (!zone.classList.contains('awake')) {
+    thread.classList.remove('wobble');
+    void thread.offsetWidth; // trigger reflow
+    thread.classList.add('wobble');
+  }
+
+  zone.classList.add('awake');
+
+  // Reset the sleep timer
+  if (threadSleepTimer) clearTimeout(threadSleepTimer);
+  threadSleepTimer = setTimeout(() => {
+    zone.classList.remove('awake');
+  }, 2500); // Fades out after 2.5 seconds of stillness
+}
+
+function renderGoldTicks() {
+  const container = document.getElementById('gold-ticks-container');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  const depth = breadcrumbPath.length;
+  // If we are at root (depth 1), just show one tick at the top
+  // If we are deep, space them evenly along the thread
+  
+  for (let i = 0; i < depth; i++) {
+    const tick = document.createElement('div');
+    tick.className = 'gold-tick' + (i === depth - 1 ? ' current' : '');
+    
+    // Calculate vertical position (20px top padding + evenly spaced)
+    const availableHeight = window.innerHeight * 0.6;
+const spacing = depth > 1 ? (i * (availableHeight / (depth - 1))) : 0;
+    tick.style.top = `calc(20px + ${spacing}px)`; 
+    
+    container.appendChild(tick);
+  }
+}
+
 function enterFolder(id, name){
   const folderId=(id==='root')?null:id;
   breadcrumbPath.push({id:folderId, name:name});
   currentFolderId=folderId;
   renderTableView();
+  renderGoldTicks(); // NEW
+  awakenGoldLine();  // NEW
 }
 
 function navToBc(idx){
   breadcrumbPath=breadcrumbPath.slice(0,idx+1);
   currentFolderId=breadcrumbPath[breadcrumbPath.length-1].id;
   renderTableView();
+  renderGoldTicks(); // NEW
+  awakenGoldLine();  // NEW
 }
 
 async function openDiscourse(id){
@@ -2803,7 +2904,14 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
   });
 
   document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){e.preventDefault();if(currentView==='lighthouse')saveCurrentDiscourse();}if(e.key==="Escape"&&currentView==='lighthouse')goBack();if(e.key==="Enter"&&document.getElementById("folder-modal").classList.contains("visible"))confirmNewFolder();if(e.key==="Enter"&&document.getElementById("rename-modal").classList.contains("visible"))confirmRename();if(e.key==="Escape"&&document.getElementById("global-search-modal").classList.contains("visible"))closeGlobalSearch();});
+  document.getElementById('gold-line-trigger').addEventListener('touchstart', awakenGoldLine, {passive: true});
+  // Awaken the thread on movement
+  const soupView = document.getElementById('view-soup');
+  soupView.addEventListener('scroll', awakenGoldLine, {passive: true});
+  soupView.addEventListener('touchstart', awakenGoldLine, {passive: true});
   
+  // Initial draw
+  renderGoldTicks();
   // Final boot trigger with Gatekeeper
   async function bootApp() {
     const lockScreen = document.getElementById('lock-screen');
