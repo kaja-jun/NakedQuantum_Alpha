@@ -1810,12 +1810,12 @@ async function renderTableView() {
   const allD = (await getDiscourses()) || [];
 
   const cf = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, currentFolderId));
-  const notes = allD.filter(d => !d.isDeleted && d.item_type === 'note' && safeMatch(d.folder_id, currentFolderId));
+  const sparks = allD.filter(d => !d.isDeleted && d.item_type === 'note' && safeMatch(d.folder_id, currentFolderId));
   const discs = allD.filter(d => !d.isDeleted && d.item_type !== 'note' && safeMatch(d.folder_id, currentFolderId));
 
   if (window.firefly) firefly.sd(allD.reduce((s, d) => s + (d.raw_text || '').length, 0));
 
-  if (!cf.length && !discs.length && !notes.length) {
+  if (!cf.length && !discs.length && !sparks.length) {
     surface.innerHTML = `<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">${isAtRoot ? 'Create a folder to begin' : 'Empty Abyss'}</div></div>`;
     return;
   }
@@ -1829,7 +1829,7 @@ async function renderTableView() {
       const sc = allF.filter(sf => safeMatch(sf.parent_id, f.id) && !sf.isDeleted).length;
       const meta = [];
       if (dc > 0) meta.push(dc + (dc === 1 ? ' discourse' : ' discourses'));
-      if (nc > 0) meta.push(nc + (nc === 1 ? ' note' : ' notes'));
+      if (nc > 0) meta.push(nc + (nc === 1 ? ' note' : ' sparks'));
       if (sc > 0) meta.push(sc + (sc === 1 ? ' folder' : ' folders'));
 
       const card = document.createElement('div');
@@ -1861,10 +1861,10 @@ async function renderTableView() {
     surface.appendChild(g);
   }
 
-  if (notes.length) {
-    const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = 'Notes'; surface.appendChild(l);
+  if (sparks.length) {
+    const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = 'Sparks'; surface.appendChild(l);
     const g = document.createElement('div'); g.className = 'cards-grid';
-    for (const n of notes) g.appendChild(await buildDiscourseCard(n));
+    for (const n of sparks) g.appendChild(await buildDiscourseCard(n));
     surface.appendChild(g);
   }
 }
