@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.24.2</title>
+<title>NakedQuantum v0.24.3</title>
 <style>
 :root {
   --bg: #000000;
@@ -2531,7 +2531,7 @@ async function confirmRename(){
   if(type==='folder')await dbPut("cosm_folders",{...(await dbGet("cosm_folders",id)),name:n});
   else if(type==='character'){await updateCharacter(id,{name:n});renderSanctuaryView();}
   else await updateDiscourse(id,{title:n});
-  closeRenameModal();
+  closeOverlay();
   await renderTableView();
   showToast("Renamed");
 }
@@ -2922,7 +2922,7 @@ initWorker();
   document.getElementById('content-textarea').addEventListener('paste',function(e){const h=e.clipboardData&&e.clipboardData.getData('text/html');if(h){e.preventDefault();document.execCommand('insertText',false,e.clipboardData.getData('text/plain'));}});
   document.getElementById('btn-rename-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-rename-confirm').addEventListener('click',confirmRename);
-  document.getElementById('btn-move-cancel').addEventListener('click',closeMoveModal);
+  document.getElementById('btn-move-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-move-confirm').addEventListener('click',()=>{
   confirmBatchMove();
 });
