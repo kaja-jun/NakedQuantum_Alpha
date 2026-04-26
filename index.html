@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.23</title>
+<title>NakedQuantum v0.23.1</title>
 <style>
 :root {
   --bg: #000000;
@@ -131,7 +131,7 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
   opacity: 1; pointer-events: auto;
 }
 .gold-thread {
-  position: absolute; top: 20px; bottom: 100px; left: 12px; width: 1px;
+  position: absolute; top: 20px; bottom: 100px; left: 7px; width: 1px;
   background: linear-gradient(to bottom, transparent, var(--accent), var(--accent-dim), transparent);
   box-shadow: 0 0 10px rgba(200, 160, 80, 0.2);
   transform-origin: top;
@@ -140,12 +140,12 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
   animation: threadWobble 0.6s ease-out;
 }
 .gold-tick {
-  position: absolute; left: 9px; width: 7px; height: 1px;
+  position: absolute; left: 4px; width: 7px; height: 1px;
   background: var(--accent);
   box-shadow: 0 0 5px var(--accent);
   transition: top 0.4s ease;
 }
-.gold-tick.current { width: 11px; left: 5px; height: 2px; }
+.gold-tick.current { width: 11px; left: 2px; height: 2px; }
 
 @keyframes threadWobble {
   0% { transform: scaleX(1) translateX(0); }
@@ -156,6 +156,33 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 }
 /* Optional: Hide the old breadcrumb bar to fully embrace the descent */
 /* .breadcrumb-bar { display: none !important; } */
+
+/* THE LINEAGE NAVIGATOR */
+#lineage-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1500; display: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+#lineage-overlay.active { display: block; }
+
+.lineage-panel { position: fixed; top: 0; bottom: 0; left: 0; width: 85vw; max-width: 320px; background: rgba(10,10,10,0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-right: 1px solid var(--border); z-index: 1600; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
+.lineage-panel.open { transform: translateX(0); }
+
+.lineage-header { padding: 20px 16px; font-size: 10px; letter-spacing: 3px; color: var(--accent); font-weight: 900; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+.lineage-content { flex: 1; overflow-y: auto; padding: 24px 0 100px 0; }
+
+.lineage-level { position: relative; padding: 0 0 24px 24px; }
+.lineage-level::before { content: ''; position: absolute; left: 26px; top: 22px; bottom: -10px; width: 1px; background: var(--border); }
+.lineage-level:last-child::before { display: none; }
+
+.lineage-level-dot { position: absolute; left: 24px; top: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); z-index: 2; transition: background 0.3s; }
+.lineage-level.current .lineage-level-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); width: 7px; height: 7px; left: 23px; top: 5px; }
+
+.lineage-level-name { font-size: 14px; font-weight: 700; color: var(--text); padding-left: 20px; margin-bottom: 10px; cursor: pointer; display: inline-block; transition: color 0.2s; }
+.lineage-level-name:active { opacity: 0.6; }
+.lineage-level.current .lineage-level-name { color: var(--accent); }
+
+/* The Sideways Glances (Siblings) */
+.lineage-siblings { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 8px 44px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.lineage-siblings::-webkit-scrollbar { display: none; }
+.lineage-sibling-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); font-size: 11px; padding: 6px 12px; border-radius: 8px; white-space: nowrap; font-weight: 700; }
+.lineage-sibling-btn:active { background: var(--surface3); border-color: var(--accent-dim); color: var(--text); }
 
 .mosaic-block { border-left: 2px solid var(--accent-dim); padding: 10px 14px; background: rgba(200,160,80,0.04); border-radius: 0 8px 8px 0; }
 .mosaic-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -447,11 +474,20 @@ select.cosm-input {
 
 <div class="view-host">
   <div class="view-panel soup-view" id="view-soup">
+    <div class="view-panel soup-view" id="view-soup">
+    
     <!-- INJECT THE GOLD LINE HERE -->
     <div id="gold-line-zone">
       <div class="gold-thread" id="gold-thread"></div>
       <div id="gold-ticks-container"></div>
     </div>
+
+    <div class="breadcrumb-bar" id="breadcrumb-bar"></div>
+    <div class="search-bar-wrap" id="search-bar-wrap" style="display:none;">
+      <input class="search-input" id="search-input" placeholder="Search discourses...">
+    </div>
+    <div class="table-surface" id="table-surface"></div>
+  </div>
   <div id="gold-line-trigger" style="position:absolute;top:0;bottom:0;left:0;width:20px;z-index:501;"></div>
     <div class="breadcrumb-bar" id="breadcrumb-bar"></div>
     <div class="search-bar-wrap" id="search-bar-wrap" style="display:none;">
@@ -805,6 +841,16 @@ select.cosm-input {
     <button class="modal-btn-cancel" id="btn-role-cancel">Cancel</button>
     <button class="modal-btn-confirm" id="btn-role-confirm">Anchor ✦</button>
   </div>
+</div>
+
+<!-- LINEAGE NAVIGATOR -->
+<div id="lineage-overlay"></div>
+<div id="lineage-panel" class="lineage-panel">
+  <div class="lineage-header">
+    <span>◈ LINEAGE</span>
+    <button class="btn-delete-mosaic" onclick="closeLineage()">✕</button>
+  </div>
+  <div id="lineage-content" class="lineage-content"></div>
 </div>
 
 <div id="cosm-toast"></div>
@@ -1821,6 +1867,65 @@ const spacing = depth > 1 ? (i * (availableHeight / (depth - 1))) : 0;
     
     container.appendChild(tick);
   }
+}
+
+/* LINEAGE NAVIGATOR LOGIC */
+async function openLineage() {
+  const panel = document.getElementById('lineage-panel');
+  const overlay = document.getElementById('lineage-overlay');
+  const content = document.getElementById('lineage-content');
+  if (!panel || !overlay || !content) return;
+
+  const allF = await getFolders();
+  const safeMatch = (a, b) => (String(a || 'null') === String(b || 'null'));
+  
+  content.innerHTML = '';
+  
+  for (let i = 0; i < breadcrumbPath.length; i++) {
+    const seg = breadcrumbPath[i];
+    const isCurrent = (i === breadcrumbPath.length - 1);
+    
+    const levelDiv = document.createElement('div');
+    levelDiv.className = 'lineage-level' + (isCurrent ? ' current' : '');
+    
+    // The vertical node
+    levelDiv.innerHTML = `
+      <div class="lineage-level-dot"></div>
+      <div class="lineage-level-name" onclick="navToBc(${i}); closeLineage();">${escHtml(seg.name)}</div>
+    `;
+    
+    // The sideways glances (Siblings)
+    const parentId = i === 0 ? null : breadcrumbPath[i-1].id;
+    const siblings = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, parentId) && !safeMatch(f.id, seg.id));
+    
+    if (siblings.length > 0) {
+      const sibContainer = document.createElement('div');
+      sibContainer.className = 'lineage-siblings';
+      for (const sib of siblings) {
+        const btn = document.createElement('button');
+        btn.className = 'lineage-sibling-btn';
+        btn.textContent = escHtml(sib.name);
+        btn.onclick = () => {
+          // Truncate the path to this sibling's parent, then step into the sibling
+          breadcrumbPath = breadcrumbPath.slice(0, i);
+          enterFolder(sib.id, sib.name);
+          closeLineage();
+        };
+        sibContainer.appendChild(btn);
+      }
+      levelDiv.appendChild(sibContainer);
+    }
+    
+    content.appendChild(levelDiv);
+  }
+  
+  panel.classList.add('open');
+  overlay.classList.add('active');
+}
+
+function closeLineage() {
+  document.getElementById('lineage-panel').classList.remove('open');
+  document.getElementById('lineage-overlay').classList.remove('active');
 }
 
 function enterFolder(id, name){
@@ -2900,9 +3005,19 @@ document.getElementById('btn-add-manual-memory').addEventListener('click',addMan
   const soupView = document.getElementById('view-soup');
   soupView.addEventListener('scroll', awakenGoldLine, {passive: true});
   soupView.addEventListener('touchstart', awakenGoldLine, {passive: true});
+
+// Trigger Lineage from the gold line trigger you added
+  const trigger = document.getElementById('gold-line-trigger');
+  if (trigger) {
+    trigger.addEventListener('click', openLineage);
+  }
+
+  // Close Lineage when tapping the background overlay
+  document.getElementById('lineage-overlay').addEventListener('click', closeLineage);
   
   // Initial draw
   renderGoldTicks();
+  
   // Final boot trigger with Gatekeeper
   async function bootApp() {
     const lockScreen = document.getElementById('lock-screen');
