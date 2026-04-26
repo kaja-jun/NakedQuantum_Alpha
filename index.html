@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.23.2</title>
+<title>NakedQuantum v0.24</title>
 <style>
 :root {
   --bg: #000000;
@@ -1321,9 +1321,7 @@ async function init(){
   document.getElementById('input-model').value=localStorage.getItem('nq_model')||'deepseek/deepseek-v4-flash';
 }
 
-
 /*Naked Handle*/
-
 async function handleSend() {
   const input = document.getElementById('userInput');
   const text = input.value.trim();
@@ -1532,42 +1530,112 @@ function renderDefaultBar(mode) {
 
 function enterSelectMode(item){
   selectMode=true;
-  selectedItems=new Set();
-  selectedItems.add(item.id);
-  if(currentMode==='soup') renderTableView().then(()=>renderSelectBar());
+  if(!selectedItems) selectedItems=new Set();
+  if(item&&item.id) selectedItems.add(item.id);
+  if(currentMode=='soup') renderTableView().then(()=>renderSelectBar());
   else renderSanctuaryView().then(()=>renderSelectBar());
 }
 
 function renderSelectBar(){
   const count=selectedItems.size;
   const hasFolder=[...selectedItems].some(id=>id.startsWith('f_'));
-  if(currentMode==='sanctuary'){
-    showBottomBar([
-      {icon:`${count}`,label:'Selected',action:()=>{}},
-      {icon:'✕',label:'Delete',action:()=>batchDelete(),style:'danger'},
-      {icon:'✗',label:'Cancel',action:()=>exitSelectMode()},
-    ]);
-  } else if(hasFolder){
-    showBottomBar([
-      {icon:`${count}`,label:'Selected',action:()=>{}},
-      {icon:'▤',label:'Move',action:()=>batchMove()},
-      {icon:'✕',label:'Delete',action:()=>batchDelete(),style:'danger'},
-      {icon:'✗',label:'Cancel',action:()=>exitSelectMode()},
-    ]);
-  } else {
-    showBottomBar([
-      {icon:`${count}`,label:'Selected',action:()=>{}},
-      {icon:'▤',label:'Move',action:()=>batchMove()},
-      {icon:'⌬',label:'Burn',action:()=>batchBurn()},
-      {icon:'✕',label:'Delete',action:()=>batchDelete(),style:'danger'},
-      {icon:'✗',label:'Cancel',action:()=>exitSelectMode()},
-    ]);
+  
+  if(count===0){
+    exitSelectMode();
+    return;
   }
+
+  if(currentMode==='sanctuary'){
+    if(count===1){
+      const id=[...selectedItems][0];
+      showBottomBar([
+        {icon:'✎',label:'Rename',action:()=>{exitSelectMode();openRenameForChar(id);}},
+        {icon:'✕',label:'Burn',action:()=>batchDelete(),style:'danger'},
+        {icon:'✗',label:'Cancel',action:()=>exitSelectMode()},
+      ]);
+    } else {
+      showBottomBar([
+        {icon:`${count}`,label:'Selected',action:()=>{}},
+        {icon:'✕',label:'Burn',action:()=>batchDelete(),style:'danger'},
+        {icon:'✗',label:'Cancel',action:()=>exitSelectMode()},
+      ]);
+    }
+    return;
+  }
+
+  if(count===1 && !hasFolder){
+    const id=[...selectedItems][0];
+    const isDiscourse=id.startsWith('d_')||id.startsWith('n_');
+    const pills=[
+      {icon:'✎',label:'Rename',action:()=>{exitSelectMode();openRenameForItem(id);}},
+      {icon:'▤',label:'Move',action:()=>batchMove()},
+    ];
+    if(isDiscourse){
+      pills.push({icon:'↓',label:'Export',action:()=>{exitSelectMode();exportDiscourseHTML(id);}});
+    }
+    pills.push({icon:'✕',label:'Burn',action:()=>batchDelete(),style:'danger'});
+    pills.push({icon:'✗',label:'Cancel',action:()=>exitSelectMode()});
+    showBottomBar(pills);
+  } else {
+    const pills=[
+      {icon:`${count}`,label:'Selected',action:()=>{}},
+      {icon:'▤',label:'Move',action:()=>batchMove()},
+      {icon:'✕',label:'Burn',action:()=>batchDelete(),style:'danger'},
+      {icon:'✗',label:'Cancel',action:()=>exitSelectMode()},
+    ];
+    showBottomBar(pills);
+  }
+}
+
+function openRenameForItem(id){
+  // check if it's a folder first
+  if(id.startsWith('f_')){
+    dbGet("cosm_folders", id).then(f=>{
+      if(f){
+        document.getElementById("rename-title").textContent='Rename Folder';
+        document.getElementById("rename-input").value=f.name||'';
+        document.getElementById("rename-modal").classList.add("visible");
+        document.getElementById("cosm-overlay").classList.add("active");
+        document.getElementById("rename-input").dataset.renameId=id;
+        document.getElementById("rename-input").dataset.renameType='folder';
+        setTimeout(()=>document.getElementById("rename-input").focus(),100);
+      }
+    });
+    return;
+  }
+  // discourse or note
+  dbGetAll("cosm_discourses").then(discs=>{
+    const d=discs.find(x=>x.id===id);
+    if(d){
+      document.getElementById("rename-title").textContent='Rename Discourse';
+      document.getElementById("rename-input").value=d.title||'';
+      document.getElementById("rename-modal").classList.add("visible");
+      document.getElementById("cosm-overlay").classList.add("active");
+      document.getElementById("rename-input").dataset.renameId=id;
+      document.getElementById("rename-input").dataset.renameType='discourse';
+      setTimeout(()=>document.getElementById("rename-input").focus(),100);
+    }
+  });
+}
+
+function openRenameForChar(id){
+  getCharacter(id).then(c=>{
+    if(c){
+      document.getElementById("rename-title").textContent='Rename Character';
+      document.getElementById("rename-input").value=c.name||'';
+      document.getElementById("rename-modal").classList.add("visible");
+      document.getElementById("cosm-overlay").classList.add("active");
+      document.getElementById("rename-input").dataset.renameId=id;
+      document.getElementById("rename-input").dataset.renameType='character';
+      setTimeout(()=>document.getElementById("rename-input").focus(),100);
+    }
+  });
 }
 
 function exitSelectMode(){
   selectMode=false;
   selectedItems=new Set();
+  mgmtItem=null;
   if(currentMode==='soup') renderTableView();
   else renderSanctuaryView();
   renderDefaultBar(currentMode);
@@ -1584,7 +1652,7 @@ function toggleSelectItem(id){
 
 async function batchDelete(){
   if(!selectedItems.size)return;
-  if(!confirm(`Move ${selectedItems.size} item(s) to Void?`))return;
+  if(!confirm(`Burn ${selectedItems.size} item(s) to Void?`))return;
   const allD=await getDiscourses();
   const allF=await getFolders();
   const allC=await getCharacters();
@@ -1702,6 +1770,11 @@ function openSanctuarySearch(){
 async function renderTableView() {
   const surface = document.getElementById('table-surface');
   if (!surface) return;
+  surface.onclick = (e) => {
+  if(e.target===surface && selectMode){
+    exitSelectMode();
+  }
+};
   surface.innerHTML = '';
   renderBreadcrumb();
 
@@ -1870,7 +1943,6 @@ const spacing = depth > 1 ? (i * (availableHeight / (depth - 1))) : 0;
 }
 
 /* LINEAGE NAVIGATOR LOGIC */
-/* LINEAGE NAVIGATOR LOGIC */
 async function openLineage() {
   const panel = document.getElementById('lineage-panel');
   const overlay = document.getElementById('lineage-overlay');
@@ -2026,7 +2098,7 @@ async function newDiscourseAtSoup() {
 
 async function deleteCurrentDiscourse() {
   if (!currentDiscourseId) return;
-  if (!confirm("Move this discourse to the Void?")) return;
+  if (!confirm("Burn this discourse to the Void?")) return;
   await deleteDiscourse(currentDiscourseId);
   currentDiscourseId = null;
   goBack();
@@ -2452,39 +2524,6 @@ async function confirmNewFolder(){
   await createFolder(name,parentId);document.getElementById("folder-name-input").value='';closeFolderModal();await renderTableView();showToast("Folder created");
 }
 
-/* MANAGEMENT */
-function openManagementModal(item){
-  mgmtItem=item;
-  const pills=[
-    {icon:'✎',label:'Rename',action:()=>{ renderDefaultBar(currentMode); openRenameModal(); }},
-    {icon:'▤',label:'Move',action:()=>{ renderDefaultBar(currentMode); openMoveModal(); }},
-    {icon:'↓',label:'Export',action:()=>{renderDefaultBar(currentMode);handleMgmtExport();}},
-    {icon:'◈',label:'Select',action:()=>{ renderDefaultBar(currentMode); enterSelectMode(item); }},
-    {icon:'✕',label:'Delete',action:()=>{ renderDefaultBar(currentMode); handleMgmtDelete(); },style:'danger'},
-  ];
-  showBottomBar(pills);
-}
-
-async function handleMgmtExport() {
-  if(!mgmtItem)return;
-  if(mgmtItem.type==='folder') await exportFolderContents(mgmtItem.id);
-  else if(mgmtItem.type==='discourse') await exportDiscourseHTML(mgmtItem.id);
-  else showToast("Cannot export character directly");
-  resetToDefaultBar();
-}
-
-function resetToDefaultBar(){
-  mgmtItem=null;
-  renderDefaultBar(currentMode);
-}
-
-async function handleMgmtDelete(){
-  if(!mgmtItem)return;const item=mgmtItem;
-  if(item.type==='folder'){if(!confirm(`Delete folder "${item.name}"?`))return;await deleteFolder(item.id);if(currentFolderId===item.id){breadcrumbPath.pop();currentFolderId=breadcrumbPath[breadcrumbPath.length-1].id;}await renderTableView();showToast("Folder deleted");}
-  else if(item.type==='character'){if(!confirm(`Delete character "${item.name}"?`))return;await deleteCharacter(item.id);await renderSanctuaryView();showToast("Character moved to Void");}
-  else{if(!confirm(`Move "${item.name}" to the Void?`))return;await deleteDiscourse(item.id);await renderTableView();showToast("Moved to Void ◌");}
-}
-
 /* RENAME */
 function openRenameModal(){
   if(!mgmtItem)return;
@@ -2496,15 +2535,16 @@ function openRenameModal(){
 }
 
 async function confirmRename(){
-  if(!mgmtItem)return;
   const n=document.getElementById("rename-input").value.trim();
   if(!n)return;
-  if(mgmtItem.type==='folder')await dbPut("cosm_folders",{...mgmtItem.data,name:n});
-  else if(mgmtItem.type==='character'){await updateCharacter(mgmtItem.id,{name:n});renderSanctuaryView();}
-  else await updateDiscourse(mgmtItem.id,{title:n});
+  const id=document.getElementById("rename-input").dataset.renameId;
+  const type=document.getElementById("rename-input").dataset.renameType;
+  if(!id)return;
+  if(type==='folder')await dbPut("cosm_folders",{...(await dbGet("cosm_folders",id)),name:n});
+  else if(type==='character'){await updateCharacter(id,{name:n});renderSanctuaryView();}
+  else await updateDiscourse(id,{title:n});
   closeRenameModal();
   await renderTableView();
-  resetToDefaultBar();
   showToast("Renamed");
 }
 
@@ -2785,9 +2825,7 @@ function startLP(e,card,item){
   longPressTimer=setTimeout(()=>{
     isLongPress=true;longPressConsumed=true;
     card.classList.remove('long-pressing');
-    card.classList.add('card-selected'); 
-    mgmtItem=item;
-    openManagementModal(item);
+    enterSelectMode(item);
   },LONG_PRESS_DURATION);
 }
 
