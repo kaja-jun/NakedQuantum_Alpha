@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.24</title>
+<title>NakedQuantum v0.24.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -474,21 +474,14 @@ select.cosm-input {
 
 <div class="view-host">
   <div class="view-panel soup-view" id="view-soup">
-    <div class="view-panel soup-view" id="view-soup">
     
-    <!-- INJECT THE GOLD LINE HERE -->
+    <!-- THE GOLD LINE -->
     <div id="gold-line-zone">
       <div class="gold-thread" id="gold-thread"></div>
       <div id="gold-ticks-container"></div>
     </div>
+    <div id="gold-line-trigger" style="position:absolute;top:0;bottom:0;left:0;width:20px;z-index:501;"></div>
 
-    <div class="breadcrumb-bar" id="breadcrumb-bar"></div>
-    <div class="search-bar-wrap" id="search-bar-wrap" style="display:none;">
-      <input class="search-input" id="search-input" placeholder="Search discourses...">
-    </div>
-    <div class="table-surface" id="table-surface"></div>
-  </div>
-  <div id="gold-line-trigger" style="position:absolute;top:0;bottom:0;left:0;width:20px;z-index:501;"></div>
     <div class="breadcrumb-bar" id="breadcrumb-bar"></div>
     <div class="search-bar-wrap" id="search-bar-wrap" style="display:none;">
       <input class="search-input" id="search-input" placeholder="Search discourses...">
@@ -862,7 +855,7 @@ document.addEventListener('touchstart',()=>{},{passive:true});
 
 let db=null,currentMode='soup',currentDiscourseId=null,currentFolderId=null,
     breadcrumbPath=[{id:null,name:'◈  The soup'}],editorMode='write',currentView='table',
-    mgmtItem=null,mosaicCache={},searchQuery='',activeCharId=null,sanctuarySearchQuery='';
+    mosaicCache={},searchQuery='',activeCharId=null,sanctuarySearchQuery='';
 const AKASHIC_URL='https://wandering-violet-964a.gazajar.workers.dev';
 
 let cosmUserId=localStorage.getItem('cosm_user_id')||crypto.randomUUID();
@@ -1635,7 +1628,6 @@ function openRenameForChar(id){
 function exitSelectMode(){
   selectMode=false;
   selectedItems=new Set();
-  mgmtItem=null;
   if(currentMode==='soup') renderTableView();
   else renderSanctuaryView();
   renderDefaultBar(currentMode);
@@ -2531,16 +2523,6 @@ async function confirmNewFolder(){
   await createFolder(name,parentId);document.getElementById("folder-name-input").value='';closeFolderModal();await renderTableView();showToast("Folder created");
 }
 
-/* RENAME */
-function openRenameModal(){
-  if(!mgmtItem)return;
-  document.getElementById("rename-title").textContent=mgmtItem.type==='folder'?'Rename Folder':'Rename Discourse';
-  document.getElementById("rename-input").value=mgmtItem.name||'';
-  document.getElementById("rename-modal").classList.add("visible");
-  document.getElementById("cosm-overlay").classList.add("active");
-  setTimeout(()=>document.getElementById("rename-input").focus(),100);
-}
-
 async function confirmRename(){
   const n=document.getElementById("rename-input").value.trim();
   if(!n)return;
@@ -2553,33 +2535,6 @@ async function confirmRename(){
   closeRenameModal();
   await renderTableView();
   showToast("Renamed");
-}
-
-/* MOVE */
-function openMoveModal(){
-  if(!mgmtItem)return;
-  const sel=document.getElementById("move-parent-select");
-  sel.innerHTML='<option value="">The Soup</option>';
-  getFolders().then(folders=>{
-    folders.filter(f=>f.id!==mgmtItem.id).forEach(f=>{
-      const o=document.createElement('option');
-      o.value=f.id;o.textContent=f.name;
-      const cp=mgmtItem.type==='folder'?mgmtItem.data.parent_id:mgmtItem.data.folder_id;
-      if(f.id===cp)o.selected=true;
-      sel.appendChild(o);
-    });
-  });
-  document.getElementById("move-modal").classList.add("visible");
-  document.getElementById("cosm-overlay").classList.add("active");
-}
-
-function closeMoveModal(){document.getElementById("move-modal").classList.remove("visible");closeOverlay();}
-async function confirmMove(){
-  if(!mgmtItem)return;const np=document.getElementById("move-parent-select").value||null;
-  if(mgmtItem.type==='folder'){if(np===mgmtItem.id){showToast("Can't move into itself");return;}if(np){const af=await getFolders();let ci=np;while(ci){const p=af.find(f=>f.id===ci);if(!p)break;if(p.parent_id===mgmtItem.id){showToast("Can't move into a child");return;}ci=p.parent_id;}}await dbPut("cosm_folders",{...mgmtItem.data,parent_id:np});}
-  else await updateDiscourse(mgmtItem.id,{folder_id:np});
-  let dn="The Soup";if(np){const df=await dbGet("cosm_folders",np);if(df)dn=df.name;}
-  closeMoveModal();mgmtItem=null;await renderTableView();showToast(`Moved to ${dn}`);
 }
 
 /* QUICK CAPTURE */
@@ -2679,7 +2634,6 @@ function closeOverlay(){
  'global-search-modal','capture-modal','settings-modal',
  'burn-disc-modal','role-modal','persona-select-modal'
   ].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
-  mgmtItem=null;
 }
 
 /* EDITOR */
@@ -2967,22 +2921,11 @@ initWorker();
   document.getElementById('search-input').addEventListener('input',e=>onSearchInput(e.target.value));
   document.getElementById('discourse-title').addEventListener('blur',()=>{if(currentDiscourseId&&currentView==='lighthouse')saveCurrentDiscourse(true);});
   document.getElementById('content-textarea').addEventListener('paste',function(e){const h=e.clipboardData&&e.clipboardData.getData('text/html');if(h){e.preventDefault();document.execCommand('insertText',false,e.clipboardData.getData('text/plain'));}});
-
-document.addEventListener('click',e=>{
-  if(!mgmtItem)return;
-  const bar=document.getElementById('bottom-bar');
-  const overlay=document.getElementById('cosm-overlay');
-  if(bar&&!bar.contains(e.target)&&overlay&&!overlay.classList.contains('active')){
-    resetToDefaultBar();
-  }
-});
-
   document.getElementById('btn-rename-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-rename-confirm').addEventListener('click',confirmRename);
   document.getElementById('btn-move-cancel').addEventListener('click',closeMoveModal);
   document.getElementById('btn-move-confirm').addEventListener('click',()=>{
-  if(selectMode)confirmBatchMove();
-  else confirmMove();
+  confirmBatchMove();
 });
 
   document.getElementById('btn-global-search-cancel').addEventListener('click',closeGlobalSearch);
