@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.24.4</title>
+<title>NakedQuantum v0.24.6</title>
 <style>
 :root {
   --bg: #000000;
@@ -754,6 +754,17 @@ select.cosm-input {
   <div class="modal-buttons">
     <button class="modal-btn-cancel" id="btn-capture-cancel">Cancel</button>
     <button class="modal-btn-confirm" id="btn-capture-confirm">Spark</button>
+  </div>
+</div>
+
+<div class="cosm-modal" id="discourse-modal">
+  <div class="modal-title">◈ New Discourse</div>
+  <input class="cosm-input" id="discourse-modal-title" placeholder="Title..." maxlength="120">
+  <select class="cosm-select" id="discourse-modal-folder"></select>
+  <input class="cosm-input" id="discourse-modal-new-folder" placeholder="New folder name..." maxlength="60" style="display:none;">
+  <div class="modal-buttons">
+    <button class="modal-btn-cancel" id="btn-discourse-modal-cancel">Cancel</button>
+    <button class="modal-btn-confirm" id="btn-discourse-modal-confirm">Enter Lighthouse</button>
   </div>
 </div>
 
@@ -2070,42 +2081,55 @@ async function saveCurrentDiscourse(silent=false){
   setTimeout(()=>backupToAkashic(),0);
 }
 
-async function newDiscourseInCurrent(){
-  const fId=currentFolderId;if(currentDiscourseId)await saveCurrentDiscourse(true);
-  const disc=await createDiscourse({title:"Untitled Discourse",raw_text:"",folder_id:fId});
-  await openDiscourse(disc.id);setTimeout(()=>{const t=document.getElementById("discourse-title");t.select();t.focus();},120);
-}
-
-function handleNewDiscourse() {
-  if (!currentFolderId || currentFolderId === 'root') {
-    newDiscourseAtSoup();
-  } else {
-    newDiscourseInCurrent();
-  }
-}
-
-async function newDiscourseAtSoup() {
-  const folders = await getFolders();
-  const count = folders.filter(f => f.name && f.name.startsWith('Unknown_')).length + 1;
-  const fn = `Unknown_${count}`;
-  
-  const fId = await createFolder(fn, null);
-  currentFolderId = fId;
-  const disc = await createDiscourse({
-    title: "Untitled Discourse",
-    raw_text: "",
-    folder_id: fId
+async function handleNewDiscourse(){
+  const folders=await getFolders();
+  const sel=document.getElementById('discourse-modal-folder');
+  sel.innerHTML='<option value="">— Choose folder (or auto-wrap) —</option>';
+  folders.filter(f=>!f.isDeleted).forEach(f=>{
+    const o=document.createElement('option');
+    o.value=f.id;o.textContent=f.name;
+    if(f.id===currentFolderId)o.selected=true;
+    sel.appendChild(o);
   });
+  const no=document.createElement('option');no.value='__new__';no.textContent='+ New folder...';sel.appendChild(no);
+  document.getElementById('discourse-modal-title').value='';
+  document.getElementById('discourse-modal-new-folder').style.display='none';
+  document.getElementById('discourse-modal').classList.add('visible');
+  document.getElementById('cosm-overlay').classList.add('active');
+  setTimeout(()=>document.getElementById('discourse-modal-title').focus(),100);
+}
+
+async function confirmNewDiscourse(){
+  const title=document.getElementById('discourse-modal-title').value.trim()||'Untitled Discourse';
+  let fId=document.getElementById('discourse-modal-folder').value||null;
   
-  breadcrumbPath = [{id: null, name: '◈ The Soup'}, {id: fId, name: fn}];
+  if(fId==='__new__'){
+    const nfn=document.getElementById('discourse-modal-new-folder').value.trim();
+    if(!nfn){showToast('Type a folder name ◆');return;}
+    fId=await createFolder(nfn,currentFolderId||null);
+    breadcrumbPath=[{id:null,name:'◈ The Soup'},{id:fId,name:nfn}];
+    currentFolderId=fId;
+  } else if(!fId){
+    // auto-wrap in Unknown_N
+    const all=await getFolders();
+    const count=all.filter(f=>f.name&&f.name.startsWith('Unknown_')).length+1;
+    const fn=`Unknown_${count}`;
+    fId=await createFolder(fn,null);
+    breadcrumbPath=[{id:null,name:'◈ The Soup'},{id:fId,name:fn}];
+    currentFolderId=fId;
+  } else {
+    const f=await dbGet('cosm_folders',fId);
+    if(f){breadcrumbPath=[{id:null,name:'◈ The Soup'},{id:fId,name:f.name}];currentFolderId=fId;}
+  }
+  
+  closeOverlay();
+  if(currentDiscourseId)await saveCurrentDiscourse(true);
+  const disc=await createDiscourse({title,raw_text:'',folder_id:fId});
   await openDiscourse(disc.id);
-  
-  setTimeout(() => {
-    const t = document.getElementById("discourse-title");
-    if (t) { t.select(); t.focus(); }
-  }, 120);
-  
-  showToast(`Created ${fn}`);
+  setTimeout(()=>{
+    const t=document.getElementById('discourse-title');
+    if(t){t.select();t.focus();}
+  },120);
 }
 
 async function deleteCurrentDiscourse() {
@@ -2553,7 +2577,7 @@ async function confirmRename(){
 /* QUICK CAPTURE */
 let _cs=false;
 async function openQuickCapture(){
-  const sel=document.getElementById('capture-folder');sel.innerHTML='<option value="">-- Choose folder --</option>';
+  const sel=document.getElementById('capture-folder');sel.innerHTML='<option value="">— Auto-wrap in folder —</option>';
   const folders=await getFolders();folders.forEach(f=>{const o=document.createElement('option');o.value=f.id;o.textContent=f.name;if(f.id===currentFolderId)o.selected=true;sel.appendChild(o);});
   const no=document.createElement('option');no.value='__new__';no.textContent='+ New folder...';sel.appendChild(no);
   document.getElementById('capture-title').value='';document.getElementById('capture-title').dataset.userEdited='';
@@ -2568,8 +2592,14 @@ async function confirmQuickCapture(){
   try{
     const title=document.getElementById('capture-title').value.trim()||'Untitled Capture';
     const raw_text=document.getElementById('capture-body').value.trim();if(!raw_text){showToast('Nothing to Spark ◆');return;}
-    let fId=document.getElementById('capture-folder').value||currentFolderId||null;let isNF=false;let nfn='';
+    let fId=document.getElementById('capture-folder').value||null;let isNF=false;let nfn='';
     if(fId==='__new__'){nfn=document.getElementById('capture-new-folder-input').value.trim();if(!nfn){showToast('Type a folder name first ◆');return;}fId=await createFolder(nfn,currentFolderId);isNF=true;}
+    if(!fId){
+  const all=await getFolders();
+  const count=all.filter(f=>f.name&&f.name.startsWith('Unknown_')).length+1;
+  const fn=`Unknown_${count}`;
+  fId=await createFolder(fn,currentFolderId||null);
+  isNF=true;nfn=fn;}
     const now=Date.now();await dbPut('cosm_discourses',{id:'n_'+now,title,raw_text,folder_id:fId,source_link:null,item_type:'note',created_at:now,updated_at:now});
     closeQuickCapture();if(navigator.vibrate)navigator.vibrate(50);
     if(isNF)enterFolder(fId,nfn);else await renderTableView();showToast('Sparked ◆');
@@ -2644,7 +2674,7 @@ function openSettingsModal(){
 function closeOverlay(){
   document.getElementById("cosm-overlay").classList.remove("active");
   ['folder-modal','rename-modal','move-modal',
- 'global-search-modal','capture-modal','settings-modal',
+ 'global-search-modal','capture-modal','discourse-modal','settings-modal',
  'burn-disc-modal','role-modal','persona-select-modal'
   ].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
 }
@@ -2940,7 +2970,6 @@ initWorker();
   document.getElementById('btn-move-confirm').addEventListener('click',()=>{
   confirmBatchMove();
 });
-
   document.getElementById('btn-global-search-cancel').addEventListener('click',closeGlobalSearch);
   document.getElementById('global-search-input').addEventListener('input',e=>onGlobalSearchInput(e.target.value));
   document.getElementById('capture-folder').addEventListener('change',function(){const inp=document.getElementById('capture-new-folder-input');inp.style.display=this.value==='__new__'?'block':'none';if(this.value==='__new__')setTimeout(()=>inp.focus(),50);});
@@ -2948,11 +2977,17 @@ initWorker();
   document.getElementById('btn-capture-confirm').addEventListener('click',confirmQuickCapture);
   document.getElementById('capture-body').addEventListener('input',function(){const t=document.getElementById('capture-title');if(t.dataset.userEdited==='true')return;const w=this.value.split('\n')[0].trim().split(/\s+/).filter(Boolean).slice(0,4).join(' ');t.value=w||'';});
   document.getElementById('capture-title').addEventListener('input',function(){this.dataset.userEdited='true';});
-
-document.getElementById('btn-burn-cancel').addEventListener('click',closeOverlay);
-document.getElementById('btn-burn-confirm').addEventListener('click',confirmBurnDisc);
-
-document.getElementById('btn-settings-confirm').addEventListener('click', () => {
+  document.getElementById('btn-discourse-modal-cancel').addEventListener('click',closeOverlay);
+  document.getElementById('btn-discourse-modal-confirm').addEventListener('click',confirmNewDiscourse);
+  document.getElementById('discourse-modal-folder').addEventListener('change',function(){
+  const inp=document.getElementById('discourse-modal-new-folder');
+  inp.style.display=this.value==='__new__'?'block':'none';
+  if(this.value==='__new__')setTimeout(()=>inp.focus(),50);
+});
+  document.getElementById('btn-burn-cancel').addEventListener('click',closeOverlay);
+  document.getElementById('btn-burn-confirm').addEventListener('click',confirmBurnDisc);
+  document.getElementById('btn-settings-confirm').addEventListener('click', () => {
+  
   localStorage.setItem('nq_api_key', document.getElementById('input-api-key').value.trim());
   localStorage.setItem('nq_base_url', document.getElementById('input-base-url').value.trim());
   localStorage.setItem('nq_model', document.getElementById('input-model').value); 
@@ -2962,29 +2997,24 @@ document.getElementById('btn-settings-confirm').addEventListener('click', () => 
   closeOverlay();
   showToast("Gateway Solidified ◆");
 });
-
   document.getElementById('btn-forge-save').addEventListener('click',saveCharacterForge);
   document.getElementById('btn-forge-close').addEventListener('click',closeCharacterForge);
-document.getElementById('btn-role-cancel').addEventListener('click',closeOverlay);
-document.getElementById('btn-role-confirm').addEventListener('click',confirmAddRole);
+  document.getElementById('btn-role-cancel').addEventListener('click',closeOverlay);
+  document.getElementById('btn-role-confirm').addEventListener('click',confirmAddRole);
   document.getElementById('btn-persona-back').addEventListener('click',()=>{
   showPanel('view-sanctuary');
   renderSanctuaryView();
 });
-document.getElementById('btn-save-persona').addEventListener('click',savePersonaPage);
-document.getElementById('btn-add-role').addEventListener('click',addNewRole);
-document.getElementById('chat-persona-pill').addEventListener('click',openPersonaPillSelector);
-document.getElementById('btn-persona-select-cancel').addEventListener('click',closeOverlay);
-
-document.getElementById('forge-temp').addEventListener('input',e=>{document.getElementById('forge-temp-val').textContent=parseFloat(e.target.value).toFixed(1);});
+  document.getElementById('btn-save-persona').addEventListener('click',savePersonaPage);
+  document.getElementById('btn-add-role').addEventListener('click',addNewRole);
+  document.getElementById('chat-persona-pill').addEventListener('click',openPersonaPillSelector);
+  document.getElementById('btn-persona-select-cancel').addEventListener('click',closeOverlay);
+  document.getElementById('forge-temp').addEventListener('input',e=>{document.getElementById('forge-temp-val').textContent=parseFloat(e.target.value).toFixed(1);});
   document.querySelectorAll('.forge-section-header').forEach(h=>{h.addEventListener('click',()=>{h.parentElement.classList.toggle('open');});});
-
   document.getElementById('btn-chat-back').addEventListener('click',()=>goBack());
-document.getElementById('btn-save-memory').addEventListener('click',()=>openMemoryView());
-
-document.getElementById('btn-memory-back').addEventListener('click',()=>{showPanel('view-chat');});
-document.getElementById('btn-add-manual-memory').addEventListener('click',addManualAnchor);
-
+  document.getElementById('btn-save-memory').addEventListener('click',()=>openMemoryView());
+  document.getElementById('btn-memory-back').addEventListener('click',()=>{showPanel('view-chat');});
+  document.getElementById('btn-add-manual-memory').addEventListener('click',addManualAnchor);
   document.getElementById('btn-chat-edit').addEventListener('click',()=>openCharacterForge(activeCharId));
   document.getElementById('btn-chat-clear').addEventListener('click',clearChatHistory);
   document.getElementById('btn-send').addEventListener('click',handleChatSend);
