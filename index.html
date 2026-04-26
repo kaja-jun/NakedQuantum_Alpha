@@ -1943,6 +1943,7 @@ const spacing = depth > 1 ? (i * (availableHeight / (depth - 1))) : 0;
 }
 
 /* LINEAGE NAVIGATOR LOGIC */
+/* LINEAGE NAVIGATOR LOGIC */
 async function openLineage() {
   const panel = document.getElementById('lineage-panel');
   const overlay = document.getElementById('lineage-overlay');
@@ -1967,28 +1968,34 @@ async function openLineage() {
       <div class="lineage-level-name" onclick="navToBc(${i}); closeLineage();">${escHtml(seg.name)}</div>
     `;
     
-    // THE FIX: The Soup (Index 0) has no peers. Only render sideways glances for actual folders.
-    if (i > 0) {
-      const parentId = breadcrumbPath[i-1].id;
-      const siblings = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, parentId) && !safeMatch(f.id, seg.id));
-      
-      if (siblings.length > 0) {
-        const sibContainer = document.createElement('div');
-        sibContainer.className = 'lineage-siblings';
-        for (const sib of siblings) {
-          const btn = document.createElement('button');
-          btn.className = 'lineage-sibling-btn';
-          btn.textContent = escHtml(sib.name);
-          btn.onclick = () => {
-            // Slice path to keep everything UP TO the parent of this level
-            breadcrumbPath = breadcrumbPath.slice(0, i);
-            enterFolder(sib.id, sib.name);
-            closeLineage();
-          };
-          sibContainer.appendChild(btn);
-        }
-        levelDiv.appendChild(sibContainer);
+    // NEW LOGIC: The sideways glances are the OTHER children of this level
+    // What path did we actually take?
+    const nextSeg = isCurrent ? null : breadcrumbPath[i+1];
+    
+    // Get all folders that live inside THIS segment
+    const childrenOfThisLevel = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, seg.id));
+    
+    // Filter out the path we took, leaving only the alternative "glances"
+    const alternativePaths = nextSeg 
+        ? childrenOfThisLevel.filter(f => !safeMatch(f.id, nextSeg.id))
+        : childrenOfThisLevel; // If it's the bottom folder, show all children as quick-links
+
+    if (alternativePaths.length > 0) {
+      const sibContainer = document.createElement('div');
+      sibContainer.className = 'lineage-siblings';
+      for (const alt of alternativePaths) {
+        const btn = document.createElement('button');
+        btn.className = 'lineage-sibling-btn';
+        btn.textContent = escHtml(alt.name);
+        btn.onclick = () => {
+          // Slice the path down to THIS level, then step into the new alternative path
+          breadcrumbPath = breadcrumbPath.slice(0, i + 1);
+          enterFolder(alt.id, alt.name);
+          closeLineage();
+        };
+        sibContainer.appendChild(btn);
       }
+      levelDiv.appendChild(sibContainer);
     }
     
     content.appendChild(levelDiv);
