@@ -746,14 +746,14 @@ select.cosm-input {
 </div>
 
 <div class="cosm-modal" id="capture-modal">
-  <div class="modal-title">Quick Capture</div>
+  <div class="modal-title">Quick Spark</div>
   <input class="cosm-input" id="capture-title" placeholder="Title..." maxlength="120">
   <textarea class="cosm-input" id="capture-body" placeholder="Thought, aphorism, idea..." style="min-height:120px;resize:none;font-family:Georgia,serif;line-height:1.7;font-size:15px;"></textarea>
   <select class="cosm-select" id="capture-folder"></select>
   <input class="cosm-input" id="capture-new-folder-input" placeholder="New folder name..." maxlength="60" style="display:none;">
   <div class="modal-buttons">
     <button class="modal-btn-cancel" id="btn-capture-cancel">Cancel</button>
-    <button class="modal-btn-confirm" id="btn-capture-confirm">Capture ✦</button>
+    <button class="modal-btn-confirm" id="btn-capture-confirm">Spark ✦</button>
   </div>
 </div>
 
@@ -1210,7 +1210,7 @@ async function unlockWithPRF(){
       const keyBytes = new Uint8Array(ext.prf.results.first);
       window.sessionSovereignKey = keyBytes; // Capture in RAM for backup
       await setEncryptionKey(keyBytes);
-      showToast('◆ Sovereign key active');
+      showToast('Sovereign key active ◆');
       return true;
     }
   } catch(e) {
@@ -1242,7 +1242,7 @@ async function unlockWithPRF(){
 window.sessionSovereignKey = null;
 
 function showSovereignKey() {
-  if(!window.sessionSovereignKey) { showToast("Unlock Abyss first"); return; }
+  if(!window.sessionSovereignKey) { showToast("Unlock Abyss first ◆"); return; }
   const b64 = bufToB64(window.sessionSovereignKey);
   const displayInput = document.getElementById('export-key-display');
   displayInput.value = b64;
@@ -1282,7 +1282,7 @@ async function unlockWithFallbackKey() {
     await setEncryptionKey(keyBytes);
     
     document.getElementById('lock-screen').style.display = 'none';
-    showToast("◆ Abyss Unlocked"); // This toast is fine because the keyboard drops when app loads
+    showToast("Abyss Unlocked ◆"); // This toast is fine because the keyboard drops when app loads
     await init();
   } catch(e) {
     showError("⚠ INVALID KEY");
@@ -1325,7 +1325,7 @@ async function handleSend() {
   const strikeUrl = `${baseUrl}/chat/completions`;
 
   if (!apiKey) {
-    showToast("Neural Link Failure: No API Key");
+    showToast("Neural Link Failure: No API Key ◆");
     return;
   }
 
@@ -1368,7 +1368,7 @@ async function handleSend() {
 async function openBurnDiscModal(){
   const chars=await getCharacters();
   const active=chars.filter(c=>!c.isDeleted);
-  if(!active.length){showToast("No characters in Sanctuary");return;}
+  if(!active.length){showToast("No characters in Sanctuary ◆");return;}
   const charSel=document.getElementById('burn-char-select');
   charSel.innerHTML='<option value="">— Choose character —</option>';
   active.forEach(c=>{
@@ -1379,7 +1379,7 @@ async function openBurnDiscModal(){
   });
   const folders=await getFolders();
   const folderSel=document.getElementById('burn-folder-select');
-  folderSel.innerHTML='<option value="">◆ Use character name as folder</option>';
+  folderSel.innerHTML='<option value="">Use character name as folder ◆</option>';
   folders.forEach(f=>{
     const o=document.createElement('option');
     o.value=f.id;o.textContent=f.name;
@@ -1391,14 +1391,14 @@ async function openBurnDiscModal(){
 
 async function confirmBurnDisc(){
   const charId=document.getElementById('burn-char-select').value;
-  if(!charId){showToast("Choose a character first");return;}
+  if(!charId){showToast("Choose a character first ◆");return;}
   const char=await getCharacter(charId);
   const history=await dbGetByIndex('history','charId',charId);
-  if(!history.length){showToast("No chapters to burn");return;}
+  if(!history.length){showToast("No chapters to Engram ◆");return;}
   const lastBurn=parseInt(localStorage.getItem('lastBurn_'+charId)||'0');
   const newMessages=history.filter(h=>(h.created_at||0)>lastBurn);
   if(!newMessages.length){
-    showToast("No new chapters since last burn ⊹");
+    showToast("No new chapters since last burn ◆");
     closeOverlay();return;
   }
   const raw_text=newMessages.map(h=>
@@ -1452,7 +1452,7 @@ function deleteRole(id){
   const roles=getPersonaRoles().filter(r=>r.id!==id);
   savePersonaRoles(roles);
   renderRoles();
-  showToast('Role removed');
+  showToast('Role removed ◆');
 }
 
 function addNewRole(){
@@ -1465,13 +1465,13 @@ function addNewRole(){
 function confirmAddRole(){
   const name=document.getElementById('role-name-input').value.trim();
   const description=document.getElementById('role-desc-input').value.trim();
-  if(!name||!description){showToast('Fill both fields');return;}
+  if(!name||!description){showToast('Fill both fields ◆');return;}
   const roles=getPersonaRoles();
   roles.push({id:'r_'+Date.now(),name,description});
   savePersonaRoles(roles);
   renderRoles();
   closeOverlay();
-  showToast('Role anchored ✦');
+  showToast('Role anchored ◆');
 }
 
 
@@ -2020,7 +2020,7 @@ function navToBc(idx){
 
 async function openDiscourse(id){
   if(currentDiscourseId&&id!==currentDiscourseId)await saveCurrentDiscourse(true);
-  const disc=await getDiscourse(id);if(!disc){showToast("Discourse not found");return;}
+  const disc=await getDiscourse(id);if(!disc){showToast("Discourse not found ◆");return;}
   currentDiscourseId=id;
   document.getElementById("discourse-title").value=disc.title||"";
   document.getElementById("content-textarea").value=disc.raw_text||"";
@@ -2052,7 +2052,7 @@ async function saveCurrentDiscourse(silent=false){
   const title=document.getElementById("discourse-title").value.trim()||"Untitled Discourse";
   const raw_text=document.getElementById("content-textarea").value;
   await updateDiscourse(currentDiscourseId,{title,raw_text});
-  if(!silent)showToast("Saved ✓");
+  if(!silent)showToast("Saved ◆");
   setTimeout(()=>backupToAkashic(),0);
 }
 
@@ -2181,7 +2181,7 @@ temperature:parseFloat(document.getElementById('forge-temp').value)
   };
   if(activeCharId)await updateCharacter(activeCharId,data);
   else await createCharacter(data);
-  showToast("Soul Anchored ✓");
+  showToast("Soul Anchored ◆");
   closeCharacterForge();
 }
 
@@ -2251,7 +2251,7 @@ async function summariseHistory(charId,messages){
 async function saveManualMemory(charId,text){
   if(!text||!charId)return;
   await dbPut("summaries",{id:"sm_"+Date.now(),charId,text,created_at:Date.now(),type:"manual"});
-  showToast("Memory anchored ✦");
+  showToast("Memory anchored ◆");
 }
 
 async function getMemoryContext(charId){
@@ -2308,7 +2308,7 @@ async function renderMemoryView(){
 async function deleteMemory(id){
   await dbDelete('summaries',id);
   await renderMemoryView();
-  showToast('Memory removed');
+  showToast('Memory removed ◆');
 }
 
 async function addManualAnchor(){
@@ -2444,7 +2444,7 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     return data.choices?.[0]?.message?.content||null;
   }catch(err){
     console.error(err);
-    showToast("AI network failure.");
+    showToast("AI network failure ◆");
     return null;
   }
 }
@@ -2478,9 +2478,9 @@ async function renderVoidView(){
 }
 
 function openVoidView() { showPanel('view-void'); renderVoidView(); }
-async function handleRestore(id,type){if(type==='discourse')await restoreDiscourse(id);else await restoreCharacter(id);showToast("Restored ✓");await renderVoidView();}
-async function handlePurge(id,type){if(!confirm("Permanently delete?"))return;if(type==='discourse')await purgeDiscourse(id);else await purgeCharacter(id);showToast("Purged");await renderVoidView();}
-async function purgeAll(){const delD=await getDeletedDiscourses(),delC=await getDeletedCharacters();if(!delD.length&&!delC.length){showToast("Void is empty");return;}if(!confirm(`Permanently delete all items?`))return;for(const d of delD)await purgeDiscourse(d.id);for(const c of delC)await purgeCharacter(c.id);showToast("Void purged");await renderVoidView();}
+async function handleRestore(id,type){if(type==='discourse')await restoreDiscourse(id);else await restoreCharacter(id);showToast("Restored ◆");await renderVoidView();}
+async function handlePurge(id,type){if(!confirm("Permanently delete?"))return;if(type==='discourse')await purgeDiscourse(id);else await purgeCharacter(id);showToast("Purged ◆");await renderVoidView();}
+async function purgeAll(){const delD=await getDeletedDiscourses(),delC=await getDeletedCharacters();if(!delD.length&&!delC.length){showToast("Void is empty ◆");return;}if(!confirm(`Permanently delete all items?`))return;for(const d of delD)await purgeDiscourse(d.id);for(const c of delC)await purgeCharacter(c.id);showToast("Void purged");await renderVoidView();}
 
 /* SEARCH */
 function onSearchInput(val){searchQuery=val.trim().toLowerCase();renderTableView();}
@@ -2519,7 +2519,7 @@ function closeFolderModal(){document.getElementById("folder-modal").classList.re
 async function confirmNewFolder(){
   const name=document.getElementById("folder-name-input").value.trim();if(!name)return;
   const parentId=document.getElementById("folder-parent-select").value||null;
-  await createFolder(name,parentId);document.getElementById("folder-name-input").value='';closeFolderModal();await renderTableView();showToast("Folder created");
+  await createFolder(name,parentId);document.getElementById("folder-name-input").value='';closeFolderModal();await renderTableView();showToast("Folder created ◆");
 }
 
 async function confirmRename(){
@@ -2533,7 +2533,7 @@ async function confirmRename(){
   else await updateDiscourse(id,{title:n});
   closeOverlay();
   await renderTableView();
-  showToast("Renamed");
+  showToast("Renamed ◆");
 }
 
 /* QUICK CAPTURE */
@@ -2553,13 +2553,13 @@ async function confirmQuickCapture(){
   if(_cs)return;_cs=true;
   try{
     const title=document.getElementById('capture-title').value.trim()||'Untitled Capture';
-    const raw_text=document.getElementById('capture-body').value.trim();if(!raw_text){showToast('Nothing to capture');return;}
+    const raw_text=document.getElementById('capture-body').value.trim();if(!raw_text){showToast('Nothing to Spark ◆');return;}
     let fId=document.getElementById('capture-folder').value||currentFolderId||null;let isNF=false;let nfn='';
-    if(fId==='__new__'){nfn=document.getElementById('capture-new-folder-input').value.trim();if(!nfn){showToast('Type a folder name first');return;}fId=await createFolder(nfn,currentFolderId);isNF=true;}
+    if(fId==='__new__'){nfn=document.getElementById('capture-new-folder-input').value.trim();if(!nfn){showToast('Type a folder name first ◆');return;}fId=await createFolder(nfn,currentFolderId);isNF=true;}
     const now=Date.now();await dbPut('cosm_discourses',{id:'n_'+now,title,raw_text,folder_id:fId,source_link:null,item_type:'note',created_at:now,updated_at:now});
     closeQuickCapture();if(navigator.vibrate)navigator.vibrate(50);
-    if(isNF)enterFolder(fId,nfn);else await renderTableView();showToast('Captured ✦');
-  }catch(err){console.error(err);showToast('Capture failed');}finally{_cs=false;}
+    if(isNF)enterFolder(fId,nfn);else await renderTableView();showToast('Sparked ◆');
+  }catch(err){console.error(err);showToast('Spark failed ◆');}finally{_cs=false;}
 }
 
 // 1. Initial State
@@ -2598,7 +2598,7 @@ function summonNewModel() {
     renderModelSelect();
     document.getElementById('input-model').value = val;
     input.value = '';
-    showToast("Engine Summoned");
+    showToast("Engine Summoned ◆");
   }
 }
 
@@ -2607,14 +2607,14 @@ function removeActiveModel() {
   const target = select.value;
   
   if(modelHistory.length <= 1) {
-    showToast("Cannot purge the last remaining engine");
+    showToast("Cannot purge the last remaining engine ◆");
     return;
   }
 
   modelHistory = modelHistory.filter(m => m !== target);
   localStorage.setItem('nq_model_history', JSON.stringify(modelHistory));
   renderModelSelect();
-  showToast("Purged to the Abyss");
+  showToast("Purged to the Abyss ◆");
 }
 
 function openSettingsModal(){
@@ -2746,35 +2746,35 @@ async function exportDiscourseHTML(id){
   const a=document.createElement('a');
   a.href=url;a.download=`${(d.title||'discourse').replace(/[^a-z0-9]/gi,'_').toLowerCase()}.html`;
   a.click();URL.revokeObjectURL(url);
-  showToast('Exported ✓');
+  showToast('Exported ◆');
 }
 
 /* EXPORTS */
-async function exportMarkdown(){if(!currentDiscourseId)return;await saveCurrentDiscourse(true);const d=await getDiscourse(currentDiscourseId);if(!d)return;const tile=await getMosaicTile(currentDiscourseId);let md=`# ${d.title}\n\n`;if(tile&&tile.anchors&&tile.anchors.length)md+=`> **Mosaic**\n${tile.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${(d.title||"discourse").replace(/[^a-z0-9]/gi,"_").toLowerCase()}.md`;a.click();URL.revokeObjectURL(url);showToast("Exported as Markdown");}
+async function exportMarkdown(){if(!currentDiscourseId)return;await saveCurrentDiscourse(true);const d=await getDiscourse(currentDiscourseId);if(!d)return;const tile=await getMosaicTile(currentDiscourseId);let md=`# ${d.title}\n\n`;if(tile&&tile.anchors&&tile.anchors.length)md+=`> **Mosaic**\n${tile.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${(d.title||"discourse").replace(/[^a-z0-9]/gi,"_").toLowerCase()}.md`;a.click();URL.revokeObjectURL(url);showToast("Exported as Markdown ◆");}
 async function exportPDF(){if(!currentDiscourseId)return;await saveCurrentDiscourse(true);const d=await getDiscourse(currentDiscourseId);if(!d)return;const tile=await getMosaicTile(currentDiscourseId);let mh="";if(tile&&tile.anchors&&tile.anchors.length)mh=`<div style="border-left:3px solid #c8a050;padding:10px 16px;margin:16px 0;background:#f9f5ee;"><div style="font-size:11px;letter-spacing:2px;font-weight:900;margin-bottom:8px;color:#8a6e35;">◈ MOSAIC</div>${tile.anchors.map(a=>`<div style="margin:4px 0;">• ${escHtml(a)}</div>`).join('')}</div>`;const content=renderContent(d.raw_text||"");const fh=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(d.title||"Discourse")}</title><style>body{font-family:Georgia,serif;max-width:700px;margin:0 auto;padding:20px;color:#1a1a1a;line-height:1.8;}h1{font-size:26px;border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:6px;}.meta{font-size:12px;color:#888;margin-bottom:24px;}h2{font-size:20px;}h3{font-size:16px;color:#555;}pre{background:#f4f4f4;padding:14px;border-radius:6px;overflow-x:auto;}code{font-family:monospace;font-size:13px;}blockquote{border-left:3px solid #ccc;padding-left:14px;color:#666;font-style:italic;margin:12px 0;}</style></head><body><h1>${escHtml(d.title||"Untitled")}</h1><div class="meta">${new Date(d.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div>${mh}${content}</body></html>`;const iframe=document.createElement('iframe');iframe.style.cssText='position:absolute;width:0;height:0;border:none;';document.body.appendChild(iframe);const doc=iframe.contentWindow.document;doc.open();doc.write(fh);doc.close();setTimeout(()=>{iframe.contentWindow.focus();iframe.contentWindow.print();setTimeout(()=>document.body.removeChild(iframe),10000);},500);}
 async function exportDiscourseMarkdown(id){const d=await getDiscourse(id);if(!d)return;const tile=await getMosaicTile(id);let md=`# ${d.title}\n\n`;if(tile&&tile.anchors&&tile.anchors.length)md+=`> **Mosaic**\n${tile.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${(d.title||"discourse").replace(/[^a-z0-9]/gi,"_").toLowerCase()}.md`;a.click();URL.revokeObjectURL(url);showToast("Exported");}
-async function exportFolderContents(fId){const discs=(await dbGetByIndex("cosm_discourses","folder_id",fId)).filter(d=>!d.isDeleted);if(!discs.length){showToast("No discourses to export");return;}let md=`# Folder Export\n\n`;for(const d of discs){const t=await getMosaicTile(d.id);md+=`## ${d.title}\n\n`;if(t&&t.anchors&&t.anchors.length)md+=`> **Mosaic**\n${t.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";md+=`\n\n---\n\n`;}const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`folder_export_${new Date().toISOString().slice(0,10)}.md`;a.click();URL.revokeObjectURL(url);showToast(`Exported ${discs.length} discourse(s)`);}
-async function exportJSON(){const f=await dbGetAll("cosm_folders"),d=await dbGetAll("cosm_discourses"),m=await dbGetAll("cosm_mosaic_tiles"),b=await dbGetAll("cosm_backlinks"),c=await dbGetAll("characters"),h=await dbGetAll("history"),s=await dbGetAll("summaries");const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:f,cosm_discourses:d,cosm_mosaic_tiles:m,cosm_backlinks:b,characters:c,history:h,summaries:s};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`NQ_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);showToast("Backup exported ✓");}
+async function exportFolderContents(fId){const discs=(await dbGetByIndex("cosm_discourses","folder_id",fId)).filter(d=>!d.isDeleted);if(!discs.length){showToast("No discourses to export ◆");return;}let md=`# Folder Export\n\n`;for(const d of discs){const t=await getMosaicTile(d.id);md+=`## ${d.title}\n\n`;if(t&&t.anchors&&t.anchors.length)md+=`> **Mosaic**\n${t.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";md+=`\n\n---\n\n`;}const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`folder_export_${new Date().toISOString().slice(0,10)}.md`;a.click();URL.revokeObjectURL(url);showToast(`Exported ${discs.length} discourse(s)`);}
+async function exportJSON(){const f=await dbGetAll("cosm_folders"),d=await dbGetAll("cosm_discourses"),m=await dbGetAll("cosm_mosaic_tiles"),b=await dbGetAll("cosm_backlinks"),c=await dbGetAll("characters"),h=await dbGetAll("history"),s=await dbGetAll("summaries");const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:f,cosm_discourses:d,cosm_mosaic_tiles:m,cosm_backlinks:b,characters:c,history:h,summaries:s};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`NQ_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);showToast("Backup exported ◆");}
 async function importJSON(event){const file=event.target.files[0];if(!file)return;if(!confirm("Import will merge with existing data. Continue?")){event.target.value='';return;}try{const text=await file.text();const payload=JSON.parse(text);const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store]))for(const item of payload[store])await dbPut(store,item);}mosaicCache={};if(currentMode==='soup')await renderTableView();else await renderSanctuaryView();showToast("Import complete ✓");}catch(err){console.error(err);showToast("Import failed");}event.target.value='';}
 
 /* MOSAIC EXTRACT */
 async function extractMemory(){
-  if(!currentDiscourseId)return;const rawText=document.getElementById("content-textarea").value.trim();if(!rawText||rawText.length<50){showToast("Write more before extracting");return;}
+  if(!currentDiscourseId)return;const rawText=document.getElementById("content-textarea").value.trim();if(!rawText||rawText.length<50){showToast("Write more before extracting ◆");return;}
   const key=localStorage.getItem("nexus_v7_key")||localStorage.getItem("nq_api_key")||"";if(!key){showToast("Add OpenRouter key in Settings");return;}
   document.getElementById("extract-loading").classList.add("visible");
   try{const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("activeModel_v1")||localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",max_tokens:350,messages:[{role:"system",content:`You are a conceptual anchor extractor. Read the text and return exactly 4-6 anchor phrases. Format: one per line, \"Category: brief anchor phrase\". Categories: Core tension, Open question, Key concept, Hidden assumption, Named force, Recurring image. Reply with ONLY the list.`},{role:"user",content:rawText.slice(0,3000)}]})});
-  const data=await res.json();const raw=data.choices?.[0]?.message?.content||"";if(!raw.trim()){showToast("Nothing extracted");return;}
+  const data=await res.json();const raw=data.choices?.[0]?.message?.content||"";if(!raw.trim()){showToast("Nothing extracted ◆");return;}
   const anchors=raw.split("\n").map(l=>l.trim()).filter(l=>l.length>3&&!l.startsWith("#"));
   await saveMosaicTile(currentDiscourseId,anchors);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic anchored ◆");
-  }catch(err){console.error(err);showToast("Extraction failed");}
+  }catch(err){console.error(err);showToast("Extraction failed ◆");}
   finally{document.getElementById("extract-loading").classList.remove("visible");}
 }
 
-async function confirmDeleteMosaic(){if(!currentDiscourseId)return;if(!confirm("Clear mosaic anchors?"))return;await deleteMosaicTile(currentDiscourseId);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic cleared");}
+async function confirmDeleteMosaic(){if(!currentDiscourseId)return;if(!confirm("Clear mosaic anchors?"))return;await deleteMosaicTile(currentDiscourseId);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic cleared ◆");}
 
 /* AKASHIC */
 async function backupToAkashic(){try{const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:await dbGetAll("cosm_folders"),cosm_discourses:await dbGetAll("cosm_discourses"),cosm_mosaic_tiles:await dbGetAll("cosm_mosaic_tiles"),cosm_backlinks:await dbGetAll("cosm_backlinks"),characters:await dbGetAll("characters"),history:await dbGetAll("history"),summaries:await dbGetAll("summaries")};const res=await fetch(`${AKASHIC_URL}/backup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:cosmUserId,data:JSON.stringify(payload)})});if(res.ok)showToast('Akashic Synced ◆');}catch(e){console.error(e);}}
-async function restoreFromAkashic(){if(!confirm("Pull from Akashic? This will overwrite local fragments."))return;try{const res=await fetch(`${AKASHIC_URL}/backup/latest?user_id=${cosmUserId}`);if(!res.ok)throw new Error('No backup');const payload=JSON.parse(await res.text());const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store])){const all=await dbGetAll(store);for(const item of all)await dbDelete(store,item.id);for(const item of payload[store])await dbPut(store,item);}}showToast('Sanctuary Restored ◆');setTimeout(()=>location.reload(),1200);}catch(e){console.error(e);showToast('Akashic offline');}}
+async function restoreFromAkashic(){if(!confirm("Pull from Akashic? This will overwrite local fragments."))return;try{const res=await fetch(`${AKASHIC_URL}/backup/latest?user_id=${cosmUserId}`);if(!res.ok)throw new Error('No backup');const payload=JSON.parse(await res.text());const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store])){const all=await dbGetAll(store);for(const item of all)await dbDelete(store,item.id);for(const item of payload[store])await dbPut(store,item);}}showToast('Sanctuary Restored ◆');setTimeout(()=>location.reload(),1200);}catch(e){console.error(e);showToast('Akashic offline ◆');}}
 
 /* LONG PRESS */
 function startLP(e,card,item){
@@ -2888,7 +2888,7 @@ async function handleSync() {
     }
 
     localStorage.setItem('nq_last_sync', Date.now().toString());
-    showToast("◆ Abyss Synchronized");
+    showToast("Abyss Synchronized ◆");
     
     if(currentMode === 'soup') await renderTableView();
     else await renderSanctuaryView();
@@ -2946,7 +2946,7 @@ document.getElementById('btn-settings-confirm').addEventListener('click', () => 
   localStorage.setItem('nq_supa_key', document.getElementById('input-supa-key').value.trim());
 
   closeOverlay();
-  showToast("Gateway Solidified");
+  showToast("Gateway Solidified ◆");
 });
 
   document.getElementById('btn-forge-save').addEventListener('click',saveCharacterForge);
