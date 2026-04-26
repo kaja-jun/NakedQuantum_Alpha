@@ -1218,7 +1218,7 @@ async function unlockWithPRF(){
       const keyBytes = new Uint8Array(ext.prf.results.first);
       window.sessionSovereignKey = keyBytes; // Capture in RAM for backup
       await setEncryptionKey(keyBytes);
-      showToast('◈ Sovereign key active');
+      showToast('◆ Sovereign key active');
       return true;
     }
   } catch(e) {
@@ -1290,7 +1290,7 @@ async function unlockWithFallbackKey() {
     await setEncryptionKey(keyBytes);
     
     document.getElementById('lock-screen').style.display = 'none';
-    showToast("◈ Abyss Unlocked"); // This toast is fine because the keyboard drops when app loads
+    showToast("◆ Abyss Unlocked"); // This toast is fine because the keyboard drops when app loads
     await init();
   } catch(e) {
     showError("⚠ INVALID KEY");
@@ -1304,7 +1304,7 @@ async function init(){
   // Ask iOS nicely to not erase us
   if(navigator.storage&&navigator.storage.persist){
     navigator.storage.persist().then(granted=>{
-      if(granted)console.log('◈ Storage persistence granted');
+      if(granted)console.log('◆ Storage persistence granted');
     });
   }
   
@@ -1389,7 +1389,7 @@ async function openBurnDiscModal(){
   });
   const folders=await getFolders();
   const folderSel=document.getElementById('burn-folder-select');
-  folderSel.innerHTML='<option value="">◈ Use character name as folder</option>';
+  folderSel.innerHTML='<option value="">◆ Use character name as folder</option>';
   folders.forEach(f=>{
     const o=document.createElement('option');
     o.value=f.id;o.textContent=f.name;
@@ -1635,7 +1635,7 @@ wEl.addEventListener('touchmove',()=>{wEl.classList.remove('pressing');clearTime
 function switchAppMode(mode){
   currentMode=mode;
   const mt=document.getElementById('mode-toast');
-  if(mode==='soup'){showPanel('view-soup');mt.textContent='✦ THE SOUP';}
+  if(mode==='soup'){showPanel('view-soup');mt.textContent='◈ THE SOUP';}
   else{showPanel('view-sanctuary');mt.textContent='◈ THE SANCTUARY';renderSanctuaryView();}
   mt.style.opacity='1';setTimeout(()=>{mt.style.opacity='0';},1500);
 updateHeaderButtons();
@@ -2169,7 +2169,7 @@ async function summariseHistory(charId,messages){
     if(summary){
       const id="s_"+Date.now();
       await dbPut("summaries",{id,charId,text:summary,created_at:Date.now(),type:"auto"});
-      showToast("Memory crystallised ◈");
+      showToast("Memory crystallised ◆");
     }
     return summary;
   }catch(err){console.error("Summarise failed:",err);return null;}
@@ -2254,11 +2254,11 @@ function updatePersonaPill(){
   if(chatPersonaOverride){
     const roles=getPersonaRoles();
     const r=roles.find(r=>r.id===chatPersonaOverride);
-    pill.textContent=r?'◈ '+r.name:'◈ default';
+    pill.textContent=r?'⁂ '+r.name:'⁂ default';
     pill.style.borderColor='var(--accent-dim)';
     pill.style.color='var(--accent)';
   } else {
-    pill.textContent='◈ default';
+    pill.textContent='⁂ default';
     pill.style.borderColor='var(--border)';
     pill.style.color='var(--muted)';
   }
@@ -2272,7 +2272,7 @@ function openPersonaPillSelector(){
   list.innerHTML='';
   const defBtn=document.createElement('button');
   defBtn.className='management-btn';
-  defBtn.innerHTML='<span>◈</span> Default (global only)';
+  defBtn.innerHTML='<span>⁂</span> Default (global only)';
   defBtn.addEventListener('click',()=>{
     chatPersonaOverride=null;
     updatePersonaPill();
@@ -2282,7 +2282,7 @@ function openPersonaPillSelector(){
   roles.forEach(r=>{
     const btn=document.createElement('button');
     btn.className='management-btn'+(chatPersonaOverride===r.id?' gold':'');
-    btn.innerHTML=`<span>◈</span> ${escHtml(r.name)}`;
+    btn.innerHTML=`<span>⁂</span> ${escHtml(r.name)}`;
     btn.addEventListener('click',()=>{
       chatPersonaOverride=r.id;
       updatePersonaPill();
@@ -2762,7 +2762,7 @@ async function extractMemory(){
   try{const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("activeModel_v1")||localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",max_tokens:350,messages:[{role:"system",content:`You are a conceptual anchor extractor. Read the text and return exactly 4-6 anchor phrases. Format: one per line, \"Category: brief anchor phrase\". Categories: Core tension, Open question, Key concept, Hidden assumption, Named force, Recurring image. Reply with ONLY the list.`},{role:"user",content:rawText.slice(0,3000)}]})});
   const data=await res.json();const raw=data.choices?.[0]?.message?.content||"";if(!raw.trim()){showToast("Nothing extracted");return;}
   const anchors=raw.split("\n").map(l=>l.trim()).filter(l=>l.length>3&&!l.startsWith("#"));
-  await saveMosaicTile(currentDiscourseId,anchors);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic anchored ◈");
+  await saveMosaicTile(currentDiscourseId,anchors);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic anchored ◆");
   }catch(err){console.error(err);showToast("Extraction failed");}
   finally{document.getElementById("extract-loading").classList.remove("visible");}
 }
@@ -2770,8 +2770,8 @@ async function extractMemory(){
 async function confirmDeleteMosaic(){if(!currentDiscourseId)return;if(!confirm("Clear mosaic anchors?"))return;await deleteMosaicTile(currentDiscourseId);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic cleared");}
 
 /* AKASHIC */
-async function backupToAkashic(){try{const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:await dbGetAll("cosm_folders"),cosm_discourses:await dbGetAll("cosm_discourses"),cosm_mosaic_tiles:await dbGetAll("cosm_mosaic_tiles"),cosm_backlinks:await dbGetAll("cosm_backlinks"),characters:await dbGetAll("characters"),history:await dbGetAll("history"),summaries:await dbGetAll("summaries")};const res=await fetch(`${AKASHIC_URL}/backup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:cosmUserId,data:JSON.stringify(payload)})});if(res.ok)showToast('Akashic Synced ◈');}catch(e){console.error(e);}}
-async function restoreFromAkashic(){if(!confirm("Pull from Akashic? This will overwrite local fragments."))return;try{const res=await fetch(`${AKASHIC_URL}/backup/latest?user_id=${cosmUserId}`);if(!res.ok)throw new Error('No backup');const payload=JSON.parse(await res.text());const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store])){const all=await dbGetAll(store);for(const item of all)await dbDelete(store,item.id);for(const item of payload[store])await dbPut(store,item);}}showToast('Sanctuary Restored ◈');setTimeout(()=>location.reload(),1200);}catch(e){console.error(e);showToast('Akashic offline');}}
+async function backupToAkashic(){try{const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:await dbGetAll("cosm_folders"),cosm_discourses:await dbGetAll("cosm_discourses"),cosm_mosaic_tiles:await dbGetAll("cosm_mosaic_tiles"),cosm_backlinks:await dbGetAll("cosm_backlinks"),characters:await dbGetAll("characters"),history:await dbGetAll("history"),summaries:await dbGetAll("summaries")};const res=await fetch(`${AKASHIC_URL}/backup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:cosmUserId,data:JSON.stringify(payload)})});if(res.ok)showToast('Akashic Synced ◆');}catch(e){console.error(e);}}
+async function restoreFromAkashic(){if(!confirm("Pull from Akashic? This will overwrite local fragments."))return;try{const res=await fetch(`${AKASHIC_URL}/backup/latest?user_id=${cosmUserId}`);if(!res.ok)throw new Error('No backup');const payload=JSON.parse(await res.text());const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store])){const all=await dbGetAll(store);for(const item of all)await dbDelete(store,item.id);for(const item of payload[store])await dbPut(store,item);}}showToast('Sanctuary Restored ◆');setTimeout(()=>location.reload(),1200);}catch(e){console.error(e);showToast('Akashic offline');}}
 
 /* LONG PRESS */
 function startLP(e,card,item){
@@ -2887,7 +2887,7 @@ async function handleSync() {
     }
 
     localStorage.setItem('nq_last_sync', Date.now().toString());
-    showToast("◈ Abyss Synchronized");
+    showToast("◆ Abyss Synchronized");
     
     if(currentMode === 'soup') await renderTableView();
     else await renderSanctuaryView();
