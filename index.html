@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.24.3</title>
+<title>NakedQuantum v0.24.4</title>
 <style>
 :root {
   --bg: #000000;
@@ -1411,9 +1411,23 @@ async function confirmBurnDisc(){
   }
   const date=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   const title=`${char.name} — ${date}`;
+  
+  // 1. Await the creation
   await createDiscourse({title,raw_text,folder_id:folderId});
+  
+  // 2. Update the burn marker
   localStorage.setItem('lastBurn_'+charId,Date.now().toString());
+  
+  // 3. Close the modal
   closeOverlay();
+  
+  // 4. THE FIX: Force the active view to re-render immediately
+  if (currentMode === 'soup') {
+      await renderTableView();
+  } else if (currentMode === 'sanctuary') {
+      await renderSanctuaryView();
+  }
+  
   showToast(`⌬ Engramed — ${newMessages.length} chapters`);
 }
 
