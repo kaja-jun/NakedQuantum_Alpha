@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.25.2</title>
+<title>NakedQuantum v0.26</title>
 <style>
 :root {
   --bg: #000000;
@@ -489,6 +489,113 @@ select.cosm-input {
 .bar-pill.gold { border-color: var(--accent-dim); }
 .bar-pill.danger .bar-pill-label { color: #ff6060; }
 .bar-pill.danger { border-color: var(--danger); }
+
+/* Watcher CSS */
+.watcher-dot {
+  position: fixed;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(200,160,80,0.6), 0 0 4px rgba(200,160,80,0.9);
+  z-index: 600;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: opacity, transform;
+}
+
+.watcher-dot.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.watcher-dot.pulsing {
+  animation: watcherPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes watcherPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(200,160,80,0.6), 0 0 4px rgba(200,160,80,0.9); }
+  50% { box-shadow: 0 0 24px rgba(200,160,80,0.9), 0 0 8px rgba(200,160,80,1), 0 0 40px rgba(200,160,80,0.3); }
+}
+
+.watcher-panel {
+  position: fixed;
+  background: rgba(10,10,10,0.96);
+  border: 1px solid var(--accent-dim);
+  border-radius: 14px;
+  padding: 16px;
+  z-index: 700;
+  max-width: 280px;
+  min-width: 220px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: scale(0.92) translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34,1.2,0.64,1);
+}
+
+.watcher-panel.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+.watcher-panel-title {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+.watcher-link-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.watcher-link-item:active {
+  background: var(--surface2);
+  border-color: var(--accent-dim);
+}
+
+.watcher-link-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.watcher-link-score {
+  font-size: 9px;
+  color: var(--accent-dim);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.watcher-panel-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 4px;
+  margin-top: 8px;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
 
 </style>
 </head>
@@ -1200,6 +1307,280 @@ const setEncryptionKey = (keyBytes) => _workerReady.then(() => new Promise((res,
   _worker.postMessage({ id: msgId, action: 'SET_KEY', data: { keyBytes: Array.from(keyBytes) } });
 }));
 
+let _watcherWorker = null;
+let _watcherReady = false;
+let _watcherPending = {};
+let _watcherMsgId = 0;
+
+// 8 safe anchor positions -- avoid header (top 56px), bottom bar (bottom 80px)
+// avoid right edge (header buttons), avoid left edge (gold thread zone)
+const WATCHER_ANCHORS = [
+  { top: '72px',  left: '50%'  },   // below header, center
+  { top: '72px',  right: '52px' },  // below header, right safe zone
+  { top: '30%',   right: '16px' },  // mid-right
+  { top: '50%',   right: '16px' },  // center-right
+  { top: '70%',   right: '16px' },  // lower-right
+  { top: '30%',   left: '40px' },   // mid-left (clear of gold thread)
+  { top: '50%',   left: '40px' },   // center-left
+  { bottom: '90px', left: '50%' },  // above bottom bar, center
+];
+
+let _watcherCurrentAnchor = -1;
+let _watcherHasLinks = false;
+let _watcherCurrentLinks = [];
+
+function initWatcher() {
+  try {
+    _watcherWorker = new Worker('watcher.worker.js', { type: 'module' });
+
+    _watcherWorker.onmessage = (e) => {
+      const { id, type, result, error } = e.data;
+
+      // Handle pending promise callbacks
+      if (id && _watcherPending[id]) {
+        if (error) _watcherPending[id].reject(new Error(error));
+        else _watcherPending[id].resolve(result);
+        delete _watcherPending[id];
+        return;
+      }
+
+      // Handle broadcast messages (no id)
+      if (type === 'READY') {
+        _watcherReady = true;
+        console.log('[Watcher] Ready -- BGE-Small loaded');
+        // Check if nightly pass is due
+        scheduleWatcherPass();
+      }
+
+      if (type === 'MODEL_PROGRESS') {
+        console.log(`[Watcher] Downloading model: ${result?.loaded || 0}MB / ${result?.total || 130}MB`);
+      }
+
+      if (type === 'ERROR') {
+        console.warn('[Watcher] Error:', e.data.reason);
+        // App continues fine -- Watcher is optional
+      }
+    };
+
+    _watcherWorker.onerror = (err) => {
+      console.warn('[Watcher] Worker crashed:', err.message);
+      // Respawn after 3 seconds
+      setTimeout(() => initWatcher(), 3000);
+    };
+
+  } catch (err) {
+    console.warn('[Watcher] Could not start worker:', err);
+  }
+}
+
+function watcherPost(type, data) {
+  return new Promise((resolve, reject) => {
+    if (!_watcherWorker) { resolve(null); return; }
+    const msgId = ++_watcherMsgId;
+    _watcherPending[msgId] = { resolve, reject };
+    _watcherWorker.postMessage({ id: msgId, type, data });
+    // Timeout safety -- don't hang forever
+    setTimeout(() => {
+      if (_watcherPending[msgId]) {
+        delete _watcherPending[msgId];
+        resolve(null); // Soft fail
+      }
+    }, 10000);
+  });
+}
+
+// ── NIGHTLY PASS SCHEDULER ───────────────────────────────────
+
+function scheduleWatcherPass() {
+  if (!_watcherReady) return;
+  const now = new Date();
+  const lastRun = parseInt(localStorage.getItem('nq_watcher_last_pass') || '0');
+  const hoursSinceLastRun = (Date.now() - lastRun) / 3600000;
+  const currentHour = now.getHours();
+
+  // Run if: after 3am AND more than 20 hours since last run
+  if (currentHour >= 3 && hoursSinceLastRun > 20) {
+    runWatcherPass();
+  } else if (hoursSinceLastRun > 20) {
+    // Not 3am yet -- schedule for next 3am check
+    const msUntil3am = ((3 - currentHour + 24) % 24) * 3600000;
+    setTimeout(() => scheduleWatcherPass(), msUntil3am + 60000);
+  }
+}
+
+async function runWatcherPass() {
+  if (!_watcherReady) return;
+  try {
+    const result = await watcherPost('RUN_PASS', {});
+    if (result) {
+      localStorage.setItem('nq_watcher_last_pass', Date.now().toString());
+      console.log(`[Watcher] Pass complete -- ${result.linksFound} links found from ${result.compared} comparisons`);
+      if (result.linksFound > 0) {
+        // Check if current view has connections -- show dot
+        await refreshWatcherDot();
+      }
+    }
+  } catch (err) {
+    console.warn('[Watcher] Pass failed:', err);
+  }
+}
+
+// ── WATCHER DOT UI ───────────────────────────────────────────
+
+async function refreshWatcherDot() {
+  if (!_watcherReady) return;
+
+  let links = [];
+
+  // If we're in Lighthouse, check links for current discourse
+  if (currentView === 'lighthouse' && currentDiscourseId) {
+    links = await watcherPost('GET_LINKS', { discourseId: currentDiscourseId }) || [];
+  } else {
+    // In Soup or Sanctuary -- get all links, show dot if any exist
+    links = await watcherPost('GET_LINKS', {}) || [];
+  }
+
+  _watcherCurrentLinks = links;
+  _watcherHasLinks = links.length > 0;
+
+  if (_watcherHasLinks) {
+    showWatcherDot();
+  } else {
+    hideWatcherDot();
+  }
+}
+
+function showWatcherDot() {
+  const dot = document.getElementById('watcher-dot');
+  if (!dot) return;
+
+  // Pick a random anchor -- not the same as last time
+  let anchorIdx;
+  do {
+    anchorIdx = Math.floor(Math.random() * WATCHER_ANCHORS.length);
+  } while (anchorIdx === _watcherCurrentAnchor && WATCHER_ANCHORS.length > 1);
+  _watcherCurrentAnchor = anchorIdx;
+
+  const anchor = WATCHER_ANCHORS[anchorIdx];
+
+  // Reset position properties before applying new ones
+  dot.style.top = '';
+  dot.style.bottom = '';
+  dot.style.left = '';
+  dot.style.right = '';
+
+  Object.assign(dot.style, anchor);
+
+  // Transform adjustments for percentage-based centering
+  if (anchor.left === '50%') {
+    dot.style.transform = 'translateX(-50%)';
+  } else {
+    dot.style.transform = '';
+  }
+
+  dot.classList.remove('visible', 'pulsing');
+  // Force reflow for re-trigger animation
+  void dot.offsetWidth;
+  dot.classList.add('visible', 'pulsing');
+}
+
+function hideWatcherDot() {
+  const dot = document.getElementById('watcher-dot');
+  if (!dot) return;
+  dot.classList.remove('visible', 'pulsing');
+}
+
+function teleportWatcherDot() {
+  // Called when user navigates -- move dot to new anchor silently
+  if (!_watcherHasLinks) return;
+  const dot = document.getElementById('watcher-dot');
+  if (!dot || !dot.classList.contains('visible')) return;
+
+  // Brief fade out, reposition, fade back
+  dot.style.opacity = '0';
+  setTimeout(() => {
+    showWatcherDot();
+  }, 400);
+}
+
+// ── WATCHER PANEL (tap to reveal) ────────────────────────────
+
+async function openWatcherPanel() {
+  const panel = document.getElementById('watcher-panel');
+  const list = document.getElementById('watcher-links-list');
+  if (!panel || !list) return;
+
+  list.innerHTML = '';
+
+  if (!_watcherCurrentLinks.length) {
+    hideWatcherDot();
+    return;
+  }
+
+  // If we're in Lighthouse, links have { linkedId, score }
+  // If we're in Soup, links have { a, b, score } -- show all
+  const isInLighthouse = currentView === 'lighthouse' && currentDiscourseId;
+
+  if (isInLighthouse) {
+    for (const link of _watcherCurrentLinks) {
+      const disc = await getDiscourse(link.linkedId);
+      if (!disc) continue;
+      const item = document.createElement('div');
+      item.className = 'watcher-link-item';
+      item.innerHTML = `
+        <div class="watcher-link-title">${escHtml(disc.title || 'Untitled')}</div>
+        <div class="watcher-link-score">◈ ${Math.round(link.score * 100)}% resonance</div>
+      `;
+      item.addEventListener('click', () => {
+        closeWatcherPanel();
+        openDiscourse(link.linkedId);
+      });
+      list.appendChild(item);
+    }
+  } else {
+    // Show top 5 links by score
+    const top5 = [..._watcherCurrentLinks]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    for (const link of top5) {
+      const discA = await getDiscourse(link.a);
+      const discB = await getDiscourse(link.b);
+      if (!discA || !discB) continue;
+      const item = document.createElement('div');
+      item.className = 'watcher-link-item';
+      item.innerHTML = `
+        <div class="watcher-link-title">${escHtml(discA.title || 'Untitled')}</div>
+        <div class="watcher-link-score">↔ ${escHtml(discB.title || 'Untitled')} · ${Math.round(link.score * 100)}%</div>
+      `;
+      item.addEventListener('click', () => {
+        closeWatcherPanel();
+        openDiscourse(link.a);
+      });
+      list.appendChild(item);
+    }
+  }
+
+  // Position panel near the dot
+  const dot = document.getElementById('watcher-dot');
+  const dotRect = dot?.getBoundingClientRect();
+  if (dotRect) {
+    const panelTop = Math.min(dotRect.top, window.innerHeight - 280);
+    const panelLeft = dotRect.left > window.innerWidth / 2
+      ? dotRect.left - 230
+      : dotRect.right + 10;
+    panel.style.top = panelTop + 'px';
+    panel.style.left = Math.max(8, panelLeft) + 'px';
+  }
+
+  panel.classList.add('visible');
+}
+
+function closeWatcherPanel() {
+  const panel = document.getElementById('watcher-panel');
+  if (panel) panel.classList.remove('visible');
+}
+
 /* FOLDERS */
 const getFolders=()=>dbGetAll("cosm_folders");
 async function createFolder(name,parent_id=null){const id="f_"+Date.now();await dbPut("cosm_folders",{id,name,parent_id,created_at:Date.now()});return id;}
@@ -1265,7 +1646,11 @@ async function createDiscourse({title="Untitled Discourse", raw_text="", folder_
 
 async function updateDiscourse(id,updates){const disc=await getDiscourse(id);if(!disc)return;const u={...disc,...updates,updated_at:Date.now()};await dbPut("cosm_discourses",u);return u;}
 async function deleteDiscourse(id){const d=await getDiscourse(id);if(!d)return;await dbPut("cosm_discourses",{...d,isDeleted:true,deleted_at:Date.now()});}
-async function purgeDiscourse(id){await dbDelete("cosm_discourses",id);const t=await dbGetByIndex("cosm_mosaic_tiles","discourse_id",id);for(const x of t)await dbDelete("cosm_mosaic_tiles",x.id);const b=await dbGetByIndex("cosm_backlinks","discourse_id",id);for(const x of b)await dbDelete("cosm_backlinks",x.id);}
+async function purgeDiscourse(id){await dbDelete("cosm_discourses",id);
+if (_watcherReady) {
+     watcherPost('PRUNE', { id }).catch(() => {});
+   }
+const t=await dbGetByIndex("cosm_mosaic_tiles","discourse_id",id);for(const x of t)await dbDelete("cosm_mosaic_tiles",x.id);const b=await dbGetByIndex("cosm_backlinks","discourse_id",id);for(const x of b)await dbDelete("cosm_backlinks",x.id);}
 async function restoreDiscourse(id){const d=await getDiscourse(id);if(!d)return;const{isDeleted,deleted_at,...rest}=d;await dbPut("cosm_discourses",{...rest,updated_at:Date.now()});}
 
 /* CHARACTERS */
@@ -1412,6 +1797,17 @@ async function init(){
   
   document.getElementById('input-api-key').value=localStorage.getItem('nq_api_key')||'';
   document.getElementById('input-model').value=localStorage.getItem('nq_model')||'deepseek/deepseek-v4-flash';
+  initWatcher(); // Boot the worker
+   // After a short delay so UI loads first
+   setTimeout(async () => {
+     if (_watcherReady) {
+       const allDiscs = await getDiscourses();
+       const activeIds = allDiscs
+         .filter(d => !d.isDeleted)
+         .map(d => d.id);
+       watcherPost('UPDATE_ACTIVE', { ids: activeIds }).catch(() => {});
+     }
+   }, 3000);
 }
 
 /*Naked Handle*/
@@ -1877,6 +2273,7 @@ function showPanel(id){
   else{hideBottomBar();}
   
   firefly.sd(id==='view-lighthouse'||id==='view-chat'?80:20);
+  teleportWatcherDot();
 }
 
 /* HEADER BUTTONS */
@@ -2333,6 +2730,16 @@ async function saveCurrentDiscourse(silent=false){
   await updateDiscourse(currentDiscourseId,{title,raw_text});
   if(!silent)showToast("Saved ◆");
   setTimeout(()=>backupToAkashic(),0);
+  if (_watcherReady && currentDiscourseId) {
+     const title = document.getElementById("discourse-title").value.trim();
+     const body = document.getElementById("content-textarea").value;
+     const embedText = title + '\n\n' + body;
+     watcherPost('EMBED', {
+       id: currentDiscourseId,
+      text: embedText,
+       lastSeenActive: Date.now()
+     }).catch(() => {}); // Fire and forget -- never block save
+   }
 }
 
 async function handleNewDiscourse(){
@@ -3461,6 +3868,18 @@ document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){
   // Initial draw
   renderGoldTicks();
   
+  document.getElementById('watcher-dot')?.addEventListener('click', openWatcherPanel);
+   document.getElementById('watcher-panel-close')?.addEventListener('click', closeWatcherPanel);
+   document.addEventListener('click', (e) => {
+     const panel = document.getElementById('watcher-panel');
+     const dot = document.getElementById('watcher-dot');
+     if (panel?.classList.contains('visible') &&
+         !panel.contains(e.target) &&
+         e.target !== dot) {
+       closeWatcherPanel();
+     }
+   });
+  
   // Final boot trigger with Gatekeeper
   async function bootApp() {
     const lockScreen = document.getElementById('lock-screen');
@@ -3507,6 +3926,11 @@ window.cosmOSPinDisc=async function({title,raw_text,source_link,backlink}){const
 <div class="bottom-bar" id="bottom-bar">
   <div class="bottom-bar-scroll" id="bottom-bar-scroll"></div>
 </div>
-
+<div class="watcher-dot" id="watcher-dot"></div>
+<div class="watcher-panel" id="watcher-panel">
+  <div class="watcher-panel-title">◈ Connections</div>
+  <div id="watcher-links-list"></div>
+  <button class="watcher-panel-close" id="watcher-panel-close">✕ close</button>
+</div>
 </body>
 </html>
