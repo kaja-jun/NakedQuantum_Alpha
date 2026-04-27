@@ -1281,12 +1281,6 @@ function initWorker(){
   });
 }
 
-/* ============================================================
-PASTE THIS ENTIRE BLOCK into index.html
-Place it right after your existing WORKER_CODE constant
-(search for “const WORKER_CODE” and paste below that whole block)
-============================================================ */
-
 const WATCHER_CODE = `
 /* WATCHER v1.0 — NakedQuantum
 BGE-Small-en-v1.5 via importScripts (classic worker, blob-safe)
@@ -1676,110 +1670,6 @@ function initWatcher() {
   } catch (err) {
     console.warn('[Watcher] Could not start:', err);
   }
-}
-
-/* ============================================================
-ALSO UPDATE initWatcher() in index.html — replace the
-existing function with this blob version:
-============================================================ */
-/* DB HELPERS */
-const dbPut = (s, d) => _workerReady.then(() => new Promise((res, rej) => {
-  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
-  _worker.postMessage({ id: msgId, action: 'PUT', store: s, data: d });
-}));
-const dbGetAll = (s) => _workerReady.then(() => new Promise((res, rej) => {
-  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
-  _worker.postMessage({ id: msgId, action: 'GET_ALL', store: s });
-}));
-const dbGet = (s, id) => _workerReady.then(() => new Promise((res, rej) => {
-  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
-  _worker.postMessage({ id: msgId, action: 'GET', store: s, data: { id } });
-}));
-const dbGetByIndex = (s, f, v) => _workerReady.then(() => new Promise((res, rej) => {
-  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
-  _worker.postMessage({ id: msgId, action: 'GET_BY_INDEX', store: s, field: f, value: v });
-}));
-const dbDelete = (s, id) => _workerReady.then(() => new Promise((res, rej) => {
-  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
-  _worker.postMessage({ id: msgId, action: 'DELETE', store: s, data: { id } });
-}));
-const setEncryptionKey = (keyBytes) => _workerReady.then(() => new Promise((res, rej) => {
-  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
-  _worker.postMessage({ id: msgId, action: 'SET_KEY', data: { keyBytes: Array.from(keyBytes) } });
-}));
-
-let _watcherWorker = null;
-let _watcherReady = false;
-let _watcherPending = {};
-let _watcherMsgId = 0;
-
-// 8 safe anchor positions -- avoid header (top 56px), bottom bar (bottom 80px)
-// avoid right edge (header buttons), avoid left edge (gold thread zone)
-const WATCHER_ANCHORS = [
-  { top: '72px',  left: '50%'  },   // below header, center
-  { top: '72px',  right: '52px' },  // below header, right safe zone
-  { top: '30%',   right: '16px' },  // mid-right
-  { top: '50%',   right: '16px' },  // center-right
-  { top: '70%',   right: '16px' },  // lower-right
-  { top: '30%',   left: '40px' },   // mid-left (clear of gold thread)
-  { top: '50%',   left: '40px' },   // center-left
-  { bottom: '90px', left: '50%' },  // above bottom bar, center
-];
-
-let _watcherCurrentAnchor = -1;
-let _watcherHasLinks = false;
-let _watcherCurrentLinks = [];
-
-function initWatcher() {
-try {
-const blob = new Blob([WATCHER_CODE], { type: ‘application/javascript’ });
-const url = URL.createObjectURL(blob);
-_watcherWorker = new Worker(url);
-
-
-_watcherWorker.onmessage = (e) => {
-  const { id, type, result, error } = e.data;
-
-  if (id && _watcherPending[id]) {
-    if (error) _watcherPending[id].reject(new Error(error));
-    else _watcherPending[id].resolve(result);
-    delete _watcherPending[id];
-    return;
-  }
-
-  if (type === 'READY') {
-    _watcherReady = true;
-    console.log('[Watcher] Ready');
-    scheduleWatcherPass();
-  }
-
-  if (type === 'WATCHER_STATUS') {
-    if (result?.status === 'loading' || e.data.status === 'loading') {
-      showToast('◈ Watcher awakening...');
-    } else if (result?.status === 'ready' || e.data.status === 'ready') {
-      showToast('◈ Watcher ready');
-    }
-  }
-
-  if (type === 'MODEL_PROGRESS') {
-    const loaded = e.data.loaded || 0;
-    const total = e.data.total || 136;
-    showToast('◈ Watcher ' + loaded + '/' + total + 'mb');
-  }
-
-  if (type === 'ERROR') {
-    console.warn('[Watcher] Error:', e.data.reason);
-  }
-};
-
-_watcherWorker.onerror = (err) => {
-  console.warn('[Watcher] Crashed:', err.message);
-  setTimeout(() => initWatcher(), 3000);
-};
-
-} catch (err) {
-console.warn(’[Watcher] Could not start:’, err);
-}
 }
 
 function watcherPost(type, data) {
