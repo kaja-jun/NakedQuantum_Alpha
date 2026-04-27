@@ -2299,6 +2299,8 @@ async function openDiscourse(id){
   if(currentDiscourseId&&id!==currentDiscourseId)await saveCurrentDiscourse(true);
   const disc=await getDiscourse(id);if(!disc){showToast("Discourse not found ◆");return;}
   currentDiscourseId=id;
+    // ---> SENSEI'S INCISION: Silent Attention Bump
+  await dbPut("cosm_discourses", {...disc, updated_at: Date.now()}); 
   document.getElementById("discourse-title").value=disc.title||"";
   document.getElementById("content-textarea").value=disc.raw_text||"";
   await renderMeta(disc);await renderMosaicDisplay(id);
