@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.24.7</title>
+<title>NakedQuantum v0.25.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -156,6 +156,43 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 }
 /* Optional: Hide the old breadcrumb bar to fully embrace the descent */
 /* .breadcrumb-bar { display: none !important; } */
+
+/* DECAY SYSTEM */
+.card-fading {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.card-fading .discourse-card-title,
+.card-fading .folder-card-name,
+.card-fading .char-card-name { color: var(--muted) !important; }
+
+.decay-mote {
+  position: absolute;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  animation: moteDrift 12s ease-in-out infinite;
+}
+.decay-mote.heavy {
+  width: 5px; height: 5px;
+  background: var(--accent-dim);
+}
+@keyframes moteDrift {
+  0%   { opacity: 0; transform: translate(0px, 0px); }
+  15%  { opacity: 0.18; }
+  50%  { opacity: 0.12; transform: translate(var(--mx), var(--my)); }
+  85%  { opacity: 0.18; }
+  100% { opacity: 0; transform: translate(0px, 0px); }
+}
+
+/* DEEP SOUP VIEW */
+.deep-soup-view { background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.deep-soup-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; flex-shrink: 0; }
+.deep-soup-title { font-size: 9px; letter-spacing: 3px; color: var(--accent-dim); opacity: 0.7; font-weight: 900; text-transform: uppercase; }
+
 
 /* THE LINEAGE NAVIGATOR */
 #lineage-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1500; display: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
@@ -490,14 +527,19 @@ select.cosm-input {
 
   <div class="view-panel void-view hidden" id="view-void">
     <div class="void-header">
-      <div class="void-title">◌ Void — Deleted Items</div>
+      <div class="void-title">◌ Void -- Deleted Items</div>
       <button class="btn-void-purge-all" id="btn-purge-all">Purge All</button>
     </div>
     <div style="padding:0 16px;">
-      <button class="btn-table-action" id="btn-close-void" style="margin-bottom:12px;flex:none;width:100%;">← Back to Soup</button>
+     <div style="padding:4px 16px 0;">
     </div>
     <div class="table-surface" id="void-surface" style="padding-top:0;"></div>
   </div>
+  </div>
+<div class="view-panel deep-soup-view hidden" id="view-deep-soup">
+  <div class="breadcrumb-bar" id="deep-soup-breadcrumb"></div>
+  <div class="table-surface" id="deep-soup-surface" style="padding-top:0;"></div>
+</div>
 
   <div class="view-panel lighthouse-view hidden" id="view-lighthouse">
     <div class="lighthouse-nav">
@@ -535,14 +577,14 @@ select.cosm-input {
           <button class="fmt-btn" id="fmt-h2">H2</button>
           <button class="fmt-btn" id="fmt-h3">H3</button>
           <div class="fmt-divider"></div>
-          <button class="fmt-btn" id="fmt-bullet">• —</button>
+          <button class="fmt-btn" id="fmt-bullet">• --</button>
           <button class="fmt-btn" id="fmt-numbered">1.</button>
           <div class="fmt-divider"></div>
           <button class="fmt-btn" id="fmt-quote">"</button>
           <button class="fmt-btn code-btn" id="fmt-code">`c`</button>
           <button class="fmt-btn code-btn" id="fmt-codeblock">```</button>
           <div class="fmt-divider"></div>
-          <button class="fmt-btn" id="fmt-divider-line">—</button>
+          <button class="fmt-btn" id="fmt-divider-line">--</button>
         </div>
 
         <div class="content-view" id="content-view"></div>
@@ -658,7 +700,6 @@ select.cosm-input {
 
  <div class="view-panel chat-view hidden" id="view-chat">
   <div class="chat-header">
-    <button class="btn-back-table" id="btn-chat-back">← Sanctuary</button>
     <div class="chat-char-info">
       <div class="chat-char-name" id="chat-char-name">Character Name</div>
     </div>
@@ -688,7 +729,6 @@ select.cosm-input {
 
 <div class="view-panel hidden" id="view-persona" style="background:var(--bg);display:flex;flex-direction:column;">
   <div class="lighthouse-nav">
-    <button class="btn-back-table" id="btn-persona-back">← Sanctuary</button>
     <div style="font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:900;">⁂ PERSONA</div>
     <button class="tbtn gold" id="btn-save-persona">Save</button>
   </div>
@@ -715,6 +755,22 @@ select.cosm-input {
   <div class="modal-buttons">
     <button class="modal-btn-cancel" id="btn-folder-cancel">Cancel</button>
     <button class="modal-btn-confirm" id="btn-folder-confirm">Create</button>
+  </div>
+</div>
+
+<div class="cosm-modal" id="data-modal">
+  <div class="modal-title">⩔ Data</div>
+  <div class="management-actions">
+    <button class="management-btn export" id="btn-data-export">
+      <span>⩔</span> Export Backup
+    </button>
+    <label class="management-btn export" style="cursor:pointer;">
+      <span>⩓</span> Import Backup
+      <input type="file" accept=".json" id="import-json-input" style="display:none;">
+    </label>
+  </div>
+  <div class="modal-buttons">
+    <button class="modal-btn-cancel" id="btn-data-cancel">Cancel</button>
   </div>
 </div>
 
@@ -875,6 +931,9 @@ const LONG_PRESS_DURATION=1000,MOVE_THRESHOLD=10;
 
 let selectMode=false, selectedItems=new Set();
 
+let deepSoupFolderId = null;
+let deepSoupPath = [{id: null, name: '꩜ Deep Soup'}];
+
 
 /* PERSONA */
 function getGlobalPersona(){
@@ -895,7 +954,7 @@ function savePersonaRoles(roles){
 class FF{constructor(){this.canvas=document.getElementById('firefly-canvas');this.ctx=this.canvas.getContext('2d');this.p=[];this.d=15;this.r();window.addEventListener('resize',()=>this.r());this.a();}r(){this.canvas.width=innerWidth;this.canvas.height=innerHeight;}sd(l){this.d=Math.min(60,15+Math.floor(l/200));}a(){this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);while(this.p.length<this.d)this.p.push({x:Math.random()*this.canvas.width,y:Math.random()*this.canvas.height,s:Math.random()*1.5+.2,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,a:Math.random()*.4+.1,p:Math.random()*.01+.002});if(this.p.length>this.d)this.p.splice(this.d);this.p.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.a+=p.p;if(p.a>.6||p.a<.1)p.p*=-1;if(p.x<0)p.x=this.canvas.width;if(p.x>this.canvas.width)p.x=0;if(p.y<0)p.y=this.canvas.height;if(p.y>this.canvas.height)p.y=0;this.ctx.beginPath();this.ctx.arc(p.x,p.y,p.s,0,Math.PI*2);this.ctx.fillStyle=`rgba(200,160,80,${p.a})`;this.ctx.fill();});requestAnimationFrame(()=>this.a());}}
 const firefly=new FF();
 
-/* DB — ABYSS-PROOF WORKER (NULL FIXED)- Nuclear fix 
+/* DB -- ABYSS-PROOF WORKER (NULL FIXED)- Nuclear fix 
 Auto increment Time-bomb & PUT code endless echo */
 const WORKER_CODE = `
 importScripts('https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js');
@@ -1270,7 +1329,7 @@ async function unlockWithPRF(){
           }
         });
         localStorage.setItem(WA_CRED_KEY, bufToB64(cred.rawId));
-        showToast('◈ Face ID registered — unlock now');
+        showToast('◈ Face ID registered -- unlock now');
         return await unlockWithPRF();
       } catch(regErr) {
         console.error('PRF register failed:', regErr);
@@ -1412,7 +1471,7 @@ async function openBurnDiscModal(){
   const active=chars.filter(c=>!c.isDeleted);
   if(!active.length){showToast("No characters in Sanctuary ◆");return;}
   const charSel=document.getElementById('burn-char-select');
-  charSel.innerHTML='<option value="">— Choose character —</option>';
+  charSel.innerHTML='<option value="">-- Choose character --</option>';
   active.forEach(c=>{
     const o=document.createElement('option');
     o.value=c.id;o.textContent=c.name;
@@ -1452,7 +1511,7 @@ async function confirmBurnDisc(){
     folderId=existing?existing.id:await createFolder(char.name,null);
   }
   const date=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  const title=`${char.name} — ${date}`;
+  const title=`${char.name} -- ${date}`;
   
   // 1. Await the creation
   await createDiscourse({title,raw_text,folder_id:folderId});
@@ -1470,7 +1529,7 @@ async function confirmBurnDisc(){
       await renderSanctuaryView();
   }
   
-  showToast(`⌬ Engramed — ${newMessages.length} chapters`);
+  showToast(`⌬ Engramed -- ${newMessages.length} chapters`);
 }
 
 /* PERSONA FUNCTIONS */
@@ -1739,12 +1798,57 @@ async function batchBurn(){
   await openBurnDiscModal();
 }
 
-/* LONG PRESS WORDMARK */
 let wpt=null;
+let wTapTimer=null;
 const wEl=document.getElementById('nq-wordmark');
-wEl.addEventListener('touchstart',()=>{wEl.classList.add('pressing');wpt=setTimeout(()=>{wEl.classList.remove('pressing');switchAppMode(currentMode==='soup'?'sanctuary':'soup');if(navigator.vibrate)navigator.vibrate(40);},600);},{passive:true});
-wEl.addEventListener('touchend',()=>{wEl.classList.remove('pressing');clearTimeout(wpt);});
-wEl.addEventListener('touchmove',()=>{wEl.classList.remove('pressing');clearTimeout(wpt);});
+
+wEl.addEventListener('touchstart',()=>{
+  wEl.classList.add('pressing');
+  wpt=setTimeout(()=>{
+    clearTimeout(wTapTimer);
+    wTapTimer=null;
+    wEl.classList.remove('pressing');
+    switchAppMode(currentMode==='soup'?'sanctuary':'soup');
+    if(navigator.vibrate)navigator.vibrate(40);
+  },600);
+},{passive:true});
+
+wEl.addEventListener('touchend',()=>{
+  wEl.classList.remove('pressing');
+  if(wpt){
+    clearTimeout(wpt);
+    wpt=null;
+    // Short tap -- go home
+    wTapTimer=setTimeout(()=>{
+      goHome();
+    },50);
+  }
+});
+
+wEl.addEventListener('touchmove',()=>{
+  wEl.classList.remove('pressing');
+  clearTimeout(wpt);
+  clearTimeout(wTapTimer);
+  wpt=null;wTapTimer=null;
+});
+
+function goHome(){
+  const mt=document.getElementById('mode-toast');
+  if(currentMode==='soup'){
+    breadcrumbPath=[{id:null,name:'◈ The Soup'}];
+    currentFolderId=null;
+    deepSoupFolderId=null;
+    showPanel('view-soup');
+    renderTableView();
+    mt.textContent='◈ HOME';
+  } else {
+    showPanel('view-sanctuary');
+    renderSanctuaryView();
+    mt.textContent='◈ SANCTUARY';
+  }
+  mt.style.opacity='1';
+  setTimeout(()=>{mt.style.opacity='0';},1200);
+}
 
 /* APP MODE */
 function switchAppMode(mode){
@@ -1759,7 +1863,7 @@ renderDefaultBar(mode);
 
 /* SHOW PANEL (Unifying logic) */
 function showPanel(id){
-  const panels=['view-soup','view-sanctuary','view-void','view-lighthouse','view-forge','view-chat','view-memory','view-persona'];
+  const panels=['view-soup','view-sanctuary','view-void','view-deep-soup','view-lighthouse','view-forge','view-chat','view-memory','view-persona'];
   panels.forEach(p=>{
     const el=document.getElementById(p);
     if(el)el.classList.add('hidden');
@@ -1778,16 +1882,26 @@ function showPanel(id){
 /* HEADER BUTTONS */
 function updateHeaderButtons(){
   const c=document.getElementById('header-actions');
-  c.innerHTML=`<button class="hdr-btn" id="hdr-void">○</button><button class="hdr-btn" id="hdr-export">⩔</button><label class="hdr-import-label">⩓<input type="file" accept=".json" id="import-json-input" style="display:none;"></label><button class="hdr-btn" id="hdr-sync">∞</button><button class="hdr-btn" id="hdr-search">⌖</button>`;
-  
+  c.innerHTML=`
+    <button class="hdr-btn" id="hdr-void">○</button>
+    <button class="hdr-btn" id="hdr-deep-soup">꩜</button>
+    <button class="hdr-btn" id="hdr-data">⩔</button>
+    <button class="hdr-btn" id="hdr-sync">∞</button>
+    <button class="hdr-btn" id="hdr-search">⌖</button>`;
+
   document.getElementById('hdr-void').onclick=()=>openVoidView();
-  document.getElementById('hdr-export').onclick=()=>{showToast('Exporting...');exportJSON();};
-  document.getElementById('import-json-input').onchange=e=>importJSON(e);
-  document.getElementById('hdr-sync').onclick = handleSync;
+  document.getElementById('hdr-deep-soup').onclick=()=>openDeepSoupView();
+  document.getElementById('hdr-data').onclick=()=>openDataModal();
+  document.getElementById('hdr-sync').onclick=handleSync;
   document.getElementById('hdr-search').onclick=()=>{
     if(currentMode==='soup')openGlobalSearch();
     else openSanctuarySearch();
   };
+}
+
+function openDataModal(){
+  document.getElementById('data-modal').classList.add('visible');
+  document.getElementById('cosm-overlay').classList.add('active');
 }
 
 async function goBack() {
@@ -1840,21 +1954,48 @@ async function renderTableView() {
   const allF = (await getFolders()) || [];
   const allD = (await getDiscourses()) || [];
 
-  const cf = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, currentFolderId));
-  const sparks = allD.filter(d => !d.isDeleted && d.item_type === 'note' && safeMatch(d.folder_id, currentFolderId));
-  const discs = allD.filter(d => !d.isDeleted && d.item_type !== 'note' && safeMatch(d.folder_id, currentFolderId));
+  const allFolders = await getFolders();
+const allDiscs = await dbGetAll("cosm_discourses");
+
+const cf = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, currentFolderId));
+const notes = allD.filter(d => !d.isDeleted && d.item_type === 'note' && safeMatch(d.folder_id, currentFolderId));
+const discs = allD.filter(d => !d.isDeleted && d.item_type !== 'note' && safeMatch(d.folder_id, currentFolderId));
+
+// Decay filtering
+const activeFolders=[], fadingFolders=[], forgottenFolderCount={};
+for(const f of cf){
+  const vitality = await getFolderVitality(f.id, allFolders, allDiscs);
+  const phase = vitality ? decayPhase(vitality) : decayPhase(f.created_at||0);
+  if(phase==='active') activeFolders.push({...f, _phase:'active'});
+  else if(phase==='fading') activeFolders.push({...f, _phase:'fading'});
+  else if(phase==='forgotten'||phase==='gone') forgottenFolderCount[f.id]=true;
+}
+
+const activeDiscs=[], fadingDiscs=[];
+let forgottenDiscCount=0, forgottenSparkCount=0;
+for(const d of [...discs,...notes]){
+  const phase = decayPhase(d.updated_at||d.created_at||0);
+  if(phase==='active') activeDiscs.push({...d,_phase:'active'});
+  else if(phase==='fading') activeDiscs.push({...d,_phase:'fading'});
+  else if(phase==='forgotten'||phase==='gone'){
+    if(d.item_type==='note') forgottenSparkCount++;
+    else forgottenDiscCount++;
+  }
+}
+const forgottenFolders=Object.keys(forgottenFolderCount).length;
+
 
   if (window.firefly) firefly.sd(allD.reduce((s, d) => s + (d.raw_text || '').length, 0));
 
-  if (!cf.length && !discs.length && !sparks.length) {
+  if (!activeFolders.length && !activeDiscs.length && !forgottenFolders && !forgottenDiscCount && !forgottenSparkCount) {
     surface.innerHTML = `<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">${isAtRoot ? 'Create a folder to begin' : 'Empty Abyss'}</div></div>`;
     return;
   }
 
-  if (cf.length) {
+  if (activeFolders.length) {
     const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = 'Folders'; surface.appendChild(l);
     const g = document.createElement('div'); g.className = 'cards-grid';
-    for (const f of cf) {
+    for (const f of activeFolders) {
       const dc = allD.filter(d => safeMatch(d.folder_id, f.id) && d.item_type !== 'note' && !d.isDeleted).length;
       const nc = allD.filter(d => safeMatch(d.folder_id, f.id) && d.item_type === 'note' && !d.isDeleted).length;
       const sc = allF.filter(sf => safeMatch(sf.parent_id, f.id) && !sf.isDeleted).length;
@@ -1868,6 +2009,8 @@ async function renderTableView() {
       if (typeof selectedItems !== 'undefined' && selectedItems.has(f.id)) card.classList.add('card-selected');
       
       card.innerHTML = `<div class="folder-card-top"><span class="folder-icon-glyph">▤</span></div><div class="folder-card-name">${escHtml(f.name)}</div><div class="folder-card-meta">${meta.length ? meta.join(' · ') : 'Empty'}</div>`;
+      
+      if(f._phase==='fading') card.classList.add('card-fading');
       
       card.onclick = () => {
         if (window.longPressConsumed) { window.longPressConsumed = false; return; }
@@ -1885,20 +2028,90 @@ async function renderTableView() {
     surface.appendChild(g);
   }
 
-  if (discs.length) {
-    const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = 'Discourses'; surface.appendChild(l);
-    const g = document.createElement('div'); g.className = 'cards-grid';
-    for (const d of discs) g.appendChild(await buildDiscourseCard(d));
-    surface.appendChild(g);
-  }
+  const activeDiscourses = activeDiscs.filter(d=>d.item_type!=='note');
+const activeSparks = activeDiscs.filter(d=>d.item_type==='note');
 
-  if (sparks.length) {
-    const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = 'Sparks'; surface.appendChild(l);
-    const g = document.createElement('div'); g.className = 'cards-grid';
-    for (const n of sparks) g.appendChild(await buildDiscourseCard(n));
-    surface.appendChild(g);
+if(activeDiscourses.length){
+  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Discourses';surface.appendChild(l);
+  const g=document.createElement('div');g.className='cards-grid';
+  for(const d of activeDiscourses){
+    const card=await buildDiscourseCard(d);
+    if(d._phase==='fading') card.classList.add('card-fading');
+    g.appendChild(card);
+  }
+  surface.appendChild(g);
+}
+
+if(activeSparks.length){
+  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Sparks';surface.appendChild(l);
+  const g=document.createElement('div');g.className='cards-grid';
+  for(const d of activeSparks){
+    const card=await buildDiscourseCard(d);
+    if(d._phase==='fading') card.classList.add('card-fading');
+    g.appendChild(card);
+  }
+  surface.appendChild(g);
+}
+// Spawn motes for forgotten items in this view
+const totalForgotten = forgottenDiscCount + forgottenSparkCount;
+if(totalForgotten > 0) spawnMotes(surface, totalForgotten, false);
+if(forgottenFolders > 0) spawnMotes(surface, forgottenFolders, true);
+}
+
+/* DECAY SYSTEM */
+const DECAY_FADING_DAYS = 0;
+const DECAY_FORGOTTEN_DAYS = 0;
+const DECAY_MOTE_DIES_DAYS = 60;
+const DAY_MS = 86400000;
+
+function decayPhase(updatedAt){
+  const age = Date.now() - updatedAt;
+  if(age < DECAY_FADING_DAYS * DAY_MS) return 'active';
+  if(age < DECAY_FORGOTTEN_DAYS * DAY_MS) return 'fading';
+  if(age < DECAY_MOTE_DIES_DAYS * DAY_MS) return 'forgotten';
+  return 'gone';
+}
+
+async function getFolderVitality(folderId, allF, allD){
+  // Find youngest updated_at among all contents recursively
+  const children = allD.filter(d => {
+    const isANull = (!d.folder_id||String(d.folder_id)==='null');
+    const isBNull = (!folderId||String(folderId)==='null');
+    if(isANull&&isBNull) return true;
+    return String(d.folder_id)===String(folderId);
+  });
+  const subfolders = allF.filter(f => {
+    const isANull = (!f.parent_id||String(f.parent_id)==='null');
+    const isBNull = (!folderId||String(folderId)==='null');
+    if(isANull&&isBNull) return false;
+    return String(f.parent_id)===String(folderId);
+  });
+
+  let youngest = 0;
+  for(const d of children) if((d.updated_at||0) > youngest) youngest = d.updated_at||0;
+  for(const sf of subfolders){
+    const sfVitality = await getFolderVitality(sf.id, allF, allD);
+    if(sfVitality > youngest) youngest = sfVitality;
+  }
+  return youngest || 0;
+}
+
+function spawnMotes(surface, count, heavy=false){
+  const max = Math.min(count, heavy ? 1 : 8);
+  for(let i=0; i<max; i++){
+    const mote = document.createElement('div');
+    mote.className = 'decay-mote' + (heavy?' heavy':'');
+    // Random position within surface
+    const x = 10 + Math.random() * 80;
+    const y = 10 + Math.random() * 70;
+    // Random drift direction
+    const mx = (Math.random()-0.5)*30;
+    const my = (Math.random()-0.5)*20;
+    mote.style.cssText = `left:${x}%;top:${y}%;--mx:${mx}px;--my:${my}px;animation-delay:${Math.random()*8}s;animation-duration:${10+Math.random()*6}s;`;
+    surface.appendChild(mote);
   }
 }
+
 
 async function buildDiscourseCard(d){
   const tile = await getMosaicTile(d.id), hasMosaic = tile && tile.anchors && tile.anchors.length > 0;
@@ -1990,14 +2203,22 @@ const spacing = depth > 1 ? (i * (availableHeight / (depth - 1))) : 0;
 }
 
 /* LINEAGE NAVIGATOR LOGIC */
-/* LINEAGE NAVIGATOR LOGIC */
 async function openLineage() {
   const panel = document.getElementById('lineage-panel');
   const overlay = document.getElementById('lineage-overlay');
   const content = document.getElementById('lineage-content');
   if (!panel || !overlay || !content) return;
 
-  const allF = await getFolders();
+  const allFRaw = await getFolders();
+const allDRaw = await dbGetAll("cosm_discourses");
+// Filter out forgotten folders from lineage
+const allF = [];
+for(const f of allFRaw){
+  if(f.isDeleted) continue;
+  const vitality = await getFolderVitality(f.id, allFRaw, allDRaw);
+  const phase = vitality ? decayPhase(vitality) : decayPhase(f.created_at||0);
+  if(phase==='active'||phase==='fading') allF.push(f);
+}
   const safeMatch = (a, b) => (String(a || 'null') === String(b || 'null'));
   
   content.innerHTML = '';
@@ -2115,7 +2336,7 @@ async function saveCurrentDiscourse(silent=false){
 async function handleNewDiscourse(){
   const folders=await getFolders();
   const sel=document.getElementById('discourse-modal-folder');
-  sel.innerHTML='<option value="">— Choose folder (or auto-wrap) —</option>';
+  sel.innerHTML='<option value="">-- Choose folder (or auto-wrap) --</option>';
   folders.filter(f=>!f.isDeleted).forEach(f=>{
     const o=document.createElement('option');
     o.value=f.id;o.textContent=f.name;
@@ -2408,7 +2629,7 @@ function updatePersonaPill(){
 
 function openPersonaPillSelector(){
   const roles=getPersonaRoles();
-  if(!roles.length){showToast('No roles yet — create in Persona page');return;}
+  if(!roles.length){showToast('No roles yet -- create in Persona page');return;}
   const modal=document.getElementById('persona-select-modal');
   const list=document.getElementById('persona-select-list');
   list.innerHTML='';
@@ -2546,6 +2767,164 @@ async function renderVoidView(){
   s.appendChild(list);
 }
 
+function buildForgottenCard(d){
+  const date=new Date(d.updated_at||d.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+  const preview=d.raw_text?d.raw_text.replace(/\n+/g,' ').slice(0,80):'';
+  const card=document.createElement('div');
+  // No click handler -- dead card, only Surface button acts
+  card.className='discourse-card card card-fading';
+  card.style.cursor='default';
+  card.innerHTML=`
+    <div class="discourse-card-title">${escHtml(d.title||'Untitled')}</div>
+    ${preview?`<div class="discourse-card-preview">${escHtml(preview)}</div>`:''}
+    <div class="discourse-card-footer">
+      <span class="discourse-card-date">${date}</span>
+    </div>
+    <button class="surface-btn" data-id="${d.id}" style="margin-top:8px;background:none;border:1px solid var(--accent-dim);color:var(--accent);font-size:10px;padding:4px 10px;border-radius:6px;font-weight:700;width:100%;">Surface ◆</button>
+  `;
+  // Wire Surface button directly
+  card.querySelector('.surface-btn').addEventListener('click', async(e)=>{
+    e.stopPropagation();
+    await updateDiscourse(d.id,{updated_at:Date.now()});
+    showToast('Surfaced ◆');
+    await renderDeepSoupView();
+  });
+  return card;
+}
+
+/* DEEP SOUP */
+function openDeepSoupView(){ 
+  deepSoupFolderId=null;
+  deepSoupPath=[{id:null, name:'꩜ Deep Soup'}];
+  showPanel('view-deep-soup'); 
+  renderDeepSoupView(); 
+}
+
+function renderDeepSoupBreadcrumb(){
+  const bar = document.getElementById('deep-soup-breadcrumb');
+  if(!bar) return;
+  bar.innerHTML = '';
+  deepSoupPath.forEach((seg, idx) => {
+    const isLast = idx === deepSoupPath.length - 1;
+    const segEl = document.createElement('div');
+    segEl.className = 'breadcrumb-seg';
+    const btn = document.createElement('button');
+    btn.className = 'breadcrumb-btn' + (isLast ? ' current' : '');
+    btn.textContent = seg.name;
+    if(!isLast){
+      btn.addEventListener('click', ()=>{
+        deepSoupPath = deepSoupPath.slice(0, idx + 1);
+        deepSoupFolderId = seg.id;
+        renderDeepSoupView();
+      });
+    }
+    segEl.appendChild(btn);
+    if(!isLast){
+      const arrow = document.createElement('span');
+      arrow.className = 'breadcrumb-arrow';
+      arrow.textContent = '▸';
+      segEl.appendChild(arrow);
+    }
+    bar.appendChild(segEl);
+  });
+}
+
+async function renderDeepSoupView(){
+  const surface = document.getElementById('deep-soup-surface');
+  surface.innerHTML = '';
+renderDeepSoupBreadcrumb();
+  const allF = await getFolders();
+  const allD = await dbGetAll("cosm_discourses");
+  const safeMatch=(a,b)=>{
+    const isANull=(!a||String(a)==='null'||String(a)==='root'||String(a)==='undefined');
+    const isBNull=(!b||String(b)==='null'||String(b)==='root'||String(b)==='undefined');
+    if(isANull&&isBNull)return true;
+    return String(a)===String(b);
+  };
+
+  // Forgotten discourses and sparks at current folder level
+  const forgottenItems = allD.filter(d=>{
+    if(d.isDeleted) return false;
+    if(!safeMatch(d.folder_id, deepSoupFolderId !== null ? deepSoupFolderId : currentFolderId)) return false;
+    const phase = decayPhase(d.updated_at||d.created_at||0);
+    return phase==='forgotten'||phase==='gone';
+  });
+
+  // Forgotten folders at current level
+  const forgottenFolders = [];
+  const rootFolders = allF.filter(f=>!f.isDeleted&&safeMatch(f.parent_id, deepSoupFolderId !== null ? deepSoupFolderId : currentFolderId));
+  for(const f of rootFolders){
+    const vitality = await getFolderVitality(f.id, allF, allD);
+    const phase = vitality ? decayPhase(vitality) : decayPhase(f.created_at||0);
+    if(phase==='forgotten'||phase==='gone') forgottenFolders.push(f);
+  }
+
+  if(!forgottenItems.length && !forgottenFolders.length){
+  // If we're inside a forgotten folder, show surface option
+  if(deepSoupFolderId!==null){
+    surface.innerHTML=`
+      <div class="table-empty">
+        <div class="table-empty-glyph">⊹</div>
+        <div class="table-empty-text">Everything inside has faded</div>
+        <button style="margin-top:16px;background:none;border:1px solid var(--accent-dim);color:var(--accent);font-size:11px;padding:8px 18px;border-radius:8px;font-weight:700;" id="btn-surface-folder">◆ Surface this folder</button>
+      </div>`;
+    document.getElementById('btn-surface-folder').addEventListener('click',async()=>{
+      const f=await dbGet('cosm_folders',deepSoupFolderId);
+      if(f){
+        await dbPut('cosm_folders',{...f,updated_at:Date.now()});
+        showToast('Folder surfaced ◆');
+        deepSoupFolderId=null;
+        renderDeepSoupView();
+      }
+    });
+    return;
+  }
+  surface.innerHTML='<div class="table-empty"><div class="table-empty-glyph">⊹</div><div class="table-empty-text">Nothing forgotten here</div></div>';
+  return;
+}
+
+  if(forgottenFolders.length){
+    const l=document.createElement('div');l.className='cards-section-label';l.textContent='Forgotten Folders';surface.appendChild(l);
+    const g=document.createElement('div');g.className='cards-grid';
+    for(const f of forgottenFolders){
+      const card=document.createElement('div');
+      card.className='folder-card card card-fading';
+      card.innerHTML=`<div class="folder-card-top"><span class="folder-icon-glyph">▤</span></div><div class="folder-card-name">${escHtml(f.name)}</div><div class="folder-card-meta">Forgotten</div>`;
+      card.onclick=()=>{
+  deepSoupFolderId=f.id;
+  deepSoupPath.push({id:f.id, name:f.name});
+  renderDeepSoupView();
+};
+
+      g.appendChild(card);
+    }
+    surface.appendChild(g);
+  }
+
+  const forgottenDiscs=forgottenItems.filter(d=>d.item_type!=='note');
+  const forgottenSparks=forgottenItems.filter(d=>d.item_type==='note');
+
+  if(forgottenDiscs.length){
+  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Forgotten Discourses';surface.appendChild(l);
+  const g=document.createElement('div');g.className='cards-grid';
+  for(const d of forgottenDiscs){
+    const card=buildForgottenCard(d);
+    g.appendChild(card);
+  }
+  surface.appendChild(g);
+}
+
+if(forgottenSparks.length){
+  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Forgotten Sparks';surface.appendChild(l);
+  const g=document.createElement('div');g.className='cards-grid';
+  for(const d of forgottenSparks){
+    const card=buildForgottenCard(d);
+    g.appendChild(card);
+  }
+  surface.appendChild(g);
+}
+}
+
 function openVoidView() { showPanel('view-void'); renderVoidView(); }
 async function handleRestore(id,type){if(type==='discourse')await restoreDiscourse(id);else await restoreCharacter(id);showToast("Restored ◆");await renderVoidView();}
 async function handlePurge(id,type){if(!confirm("Permanently delete?"))return;if(type==='discourse')await purgeDiscourse(id);else await purgeCharacter(id);showToast("Purged ◆");await renderVoidView();}
@@ -2608,7 +2987,7 @@ async function confirmRename(){
 /* QUICK CAPTURE */
 let _cs=false;
 async function openQuickCapture(){
-  const sel=document.getElementById('capture-folder');sel.innerHTML='<option value="">— Auto-wrap in folder —</option>';
+  const sel=document.getElementById('capture-folder');sel.innerHTML='<option value="">-- Auto-wrap in folder --</option>';
   const folders=await getFolders();folders.forEach(f=>{const o=document.createElement('option');o.value=f.id;o.textContent=f.name;if(f.id===currentFolderId)o.selected=true;sel.appendChild(o);});
   const no=document.createElement('option');no.value='__new__';no.textContent='+ New folder...';sel.appendChild(no);
   document.getElementById('capture-title').value='';document.getElementById('capture-title').dataset.userEdited='';
@@ -2706,7 +3085,7 @@ function closeOverlay(){
   document.getElementById("cosm-overlay").classList.remove("active");
   ['folder-modal','rename-modal','move-modal',
  'global-search-modal','capture-modal','discourse-modal','settings-modal',
- 'burn-disc-modal','role-modal','persona-select-modal'
+ 'burn-disc-modal','data-modal','role-modal','persona-select-modal'
   ].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
 }
 
@@ -2979,7 +3358,6 @@ async function handleSync() {
 /* EVENT BINDING */
 document.addEventListener('DOMContentLoaded',()=> {
 initWorker();
-  document.getElementById('btn-close-void').addEventListener('click',()=>goBack());
   document.getElementById('btn-purge-all').addEventListener('click',purgeAll);
   document.getElementById('btn-back-table').addEventListener('click',()=>goBack());
   document.getElementById('btn-write').addEventListener('click',()=>setEditorMode('write'));
@@ -3001,6 +3379,9 @@ initWorker();
   document.getElementById('btn-move-confirm').addEventListener('click',()=>{
   confirmBatchMove();
 });
+document.getElementById('btn-data-export').addEventListener('click',()=>{closeOverlay();showToast('Exporting...');exportJSON();});
+document.getElementById('import-json-input').onchange=e=>{closeOverlay();importJSON(e);};
+document.getElementById('btn-data-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-global-search-cancel').addEventListener('click',closeGlobalSearch);
   document.getElementById('global-search-input').addEventListener('input',e=>onGlobalSearchInput(e.target.value));
   document.getElementById('capture-folder').addEventListener('change',function(){const inp=document.getElementById('capture-new-folder-input');inp.style.display=this.value==='__new__'?'block':'none';if(this.value==='__new__')setTimeout(()=>inp.focus(),50);});
@@ -3032,17 +3413,12 @@ initWorker();
   document.getElementById('btn-forge-close').addEventListener('click',closeCharacterForge);
   document.getElementById('btn-role-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-role-confirm').addEventListener('click',confirmAddRole);
-  document.getElementById('btn-persona-back').addEventListener('click',()=>{
-  showPanel('view-sanctuary');
-  renderSanctuaryView();
-});
   document.getElementById('btn-save-persona').addEventListener('click',savePersonaPage);
   document.getElementById('btn-add-role').addEventListener('click',addNewRole);
   document.getElementById('chat-persona-pill').addEventListener('click',openPersonaPillSelector);
   document.getElementById('btn-persona-select-cancel').addEventListener('click',closeOverlay);
   document.getElementById('forge-temp').addEventListener('input',e=>{document.getElementById('forge-temp-val').textContent=parseFloat(e.target.value).toFixed(1);});
   document.querySelectorAll('.forge-section-header').forEach(h=>{h.addEventListener('click',()=>{h.parentElement.classList.toggle('open');});});
-  document.getElementById('btn-chat-back').addEventListener('click',()=>goBack());
   document.getElementById('btn-save-memory').addEventListener('click',()=>openMemoryView());
   document.getElementById('btn-memory-back').addEventListener('click',()=>{showPanel('view-chat');});
   document.getElementById('btn-add-manual-memory').addEventListener('click',addManualAnchor);
@@ -3064,7 +3440,7 @@ initWorker();
       if(el) el.addEventListener('click',()=>applyFormat(fmtMap[id]));
   });
 
-  document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){e.preventDefault();if(currentView==='lighthouse')saveCurrentDiscourse();}if(e.key==="Escape"&&currentView==='lighthouse')goBack();if(e.key==="Enter"&&document.getElementById("folder-modal").classList.contains("visible"))confirmNewFolder();if(e.key==="Enter"&&document.getElementById("rename-modal").classList.contains("visible"))confirmRename();if(e.key==="Escape"&&document.getElementById("global-search-modal").classList.contains("visible"))closeGlobalSearch();});
+document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){e.preventDefault();if(currentView==='lighthouse')saveCurrentDiscourse();}if(e.key==="Escape"&&currentView==='lighthouse')goBack();if(e.key==="Enter"&&document.getElementById("folder-modal").classList.contains("visible"))confirmNewFolder();if(e.key==="Enter"&&document.getElementById("rename-modal").classList.contains("visible"))confirmRename();if(e.key==="Escape"&&document.getElementById("global-search-modal").classList.contains("visible"))closeGlobalSearch();});
   document.getElementById('gold-line-trigger').addEventListener('touchstart', awakenGoldLine, {passive: true});
   // Awaken the thread on movement
   const soupView = document.getElementById('view-soup');
