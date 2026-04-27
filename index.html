@@ -1800,6 +1800,10 @@ async function init(){
   initWatcher(); // Boot the worker
    // After a short delay so UI loads first
    setTimeout(async () => {
+  const stats = await watcherPost('GET_STATS', {});
+  showToast('Watcher: ' + JSON.stringify(stats));
+}, 8000);
+  setTimeout(async () => {
      if (_watcherReady) {
        const allDiscs = await getDiscourses();
        const activeIds = allDiscs
