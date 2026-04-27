@@ -122,42 +122,32 @@ req.onerror = () => res();
 3. MODEL -- BGE-Small, cached in Cache API, loaded once
 ============================================================ */
 
+importScripts('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+
 async function loadModel() {
-try {
-// Transformers.js v3 via CDN -- loaded via importScripts below
-const { pipeline, env } = await import(
-‘https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js’
-);
+  try {
+    Transformers.env.useBrowserCache = true;
+    Transformers.env.backends.onnx.wasm.proxy = false;
 
-```
-// Use Cache API for model weights -- survives worker restarts
-env.useBrowserCache = true;
-env.cacheDir = MODEL_CACHE_KEY;
-
-// WebGPU if available (iPhone 14 has it), fallback to WASM
-env.backends.onnx.wasm.proxy = false;
-
-embedder = await pipeline('feature-extraction', MODEL_ID, {
-  quantized: true,
-  progress_callback: (progress) => {
-    if (progress.status === 'downloading') {
-      self.postMessage({
-        type: 'MODEL_PROGRESS',
-        loaded: Math.round(progress.loaded / 1024 / 1024),
-        total: Math.round(progress.total / 1024 / 1024)
-      });
-    }
+    embedder = await Transformers.pipeline('feature-extraction', MODEL_ID, {
+      quantized: true,
+      progress_callback: (progress) => {
+        if (progress.status === 'downloading') {
+          self.postMessage({
+            type: 'MODEL_PROGRESS',
+            loaded: Math.round((progress.loaded||0) / 1024 / 1024),
+            total: Math.round((progress.total||130*1024*1024) / 1024 / 1024)
+          });
+        }
+      }
+    });
+    return true;
+  } catch(err) {
+    console.error('[Watcher] Model load failed:', err);
+    return false;
   }
-});
-
-return true;
-```
-
-} catch (err) {
-console.error(’[Watcher] Model load failed:’, err);
-return false;
 }
-}
+
 
 /* ============================================================
 4. SHA256 HASH -- Skip recompute if text unchanged
