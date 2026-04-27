@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.24.6</title>
+<title>NakedQuantum v0.24.7</title>
 <style>
 :root {
   --bg: #000000;
@@ -908,7 +908,6 @@ async function initSql() {
   const SQL = await initSqlJs({ locateFile: f => 'https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/' + f });
   const existing = await loadFromOPFS();
   db = existing ? new SQL.Database(existing) : new SQL.Database();
-  
   // THE PURGE: We must destroy the old integer-based tables to rebuild them as TEXT
   // ONE-TIME MIGRATION: only drop if still old INTEGER schema
 try {
@@ -925,13 +924,11 @@ try {
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders(id TEXT PRIMARY KEY, name TEXT, parent_id TEXT, created_at INTEGER, updated_at INTEGER, is_deleted INTEGER DEFAULT 0)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses(id TEXT PRIMARY KEY, title TEXT, raw_text TEXT, folder_id TEXT, source_link TEXT, item_type TEXT, tags TEXT, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS characters(id TEXT PRIMARY KEY, name TEXT, role TEXT, backstory TEXT, personality TEXT, lorebook TEXT, scenario TEXT, inclination TEXT, relationships TEXT, pc_info TEXT, player_role_id TEXT, image TEXT, temperature REAL DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
-  
   // THE FIX: History and Summaries now use TEXT IDs (UUID/Timestamps)
   db.run("CREATE TABLE IF NOT EXISTS history(id TEXT PRIMARY KEY, charId TEXT, role TEXT, content TEXT, created_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS summaries(id TEXT PRIMARY KEY, charId TEXT, text TEXT, type TEXT, created_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles(id TEXT PRIMARY KEY, discourse_id TEXT, anchors TEXT, created_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks(id TEXT PRIMARY KEY, discourse_id TEXT, char_name TEXT, created_at INTEGER)");
-  
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS characters_enc(id TEXT PRIMARY KEY, enc TEXT)");
@@ -946,7 +943,6 @@ try {
       tableColumns[t] = info[0].values.map(v => v[1]);
     } catch(e) {}
   });
-
   db.run("DELETE FROM cosm_folders WHERE id='root'");
   await save();
 }
@@ -1119,7 +1115,6 @@ function initWorker(){
   });
 }
 
-
 /* DB HELPERS */
 const dbPut = (s, d) => _workerReady.then(() => new Promise((res, rej) => {
   const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
@@ -1146,11 +1141,47 @@ const setEncryptionKey = (keyBytes) => _workerReady.then(() => new Promise((res,
   _worker.postMessage({ id: msgId, action: 'SET_KEY', data: { keyBytes: Array.from(keyBytes) } });
 }));
 
-
 /* FOLDERS */
 const getFolders=()=>dbGetAll("cosm_folders");
 async function createFolder(name,parent_id=null){const id="f_"+Date.now();await dbPut("cosm_folders",{id,name,parent_id,created_at:Date.now()});return id;}
-async function deleteFolder(id){await dbDelete("cosm_folders",id);const ds=await dbGetByIndex("cosm_discourses","folder_id",id);for(const d of ds){d.folder_id=null;await dbPut("cosm_discourses",d);}const cf=(await dbGetAll("cosm_folders")).filter(f=>f.parent_id===id);for(const cf2 of cf)await deleteFolder(cf2.id);}
+
+async function countFolderContents(id){
+  let discourses=0,sparks=0,folders=0;
+  const ds=await dbGetByIndex("cosm_discourses","folder_id",id);
+  discourses+=ds.filter(d=>!d.isDeleted&&d.item_type!=='note').length;
+  sparks+=ds.filter(d=>!d.isDeleted&&d.item_type==='note').length;
+  const cf=(await dbGetAll("cosm_folders")).filter(f=>f.parent_id===id&&!f.isDeleted);
+  folders+=cf.length;
+  for(const child of cf){
+    const childCount=await countFolderContents(child.id);
+    discourses+=childCount.discourses;
+    sparks+=childCount.sparks;
+    folders+=childCount.folders;
+  }
+  return{discourses,sparks,folders};
+}
+
+async function deleteFolderRecursive(id){
+  const ds=await dbGetByIndex("cosm_discourses","folder_id",id);
+  for(const d of ds)if(!d.isDeleted)await deleteDiscourse(d.id);
+  const cf=(await dbGetAll("cosm_folders")).filter(f=>f.parent_id===id);
+  for(const child of cf)await deleteFolderRecursive(child.id);
+  await dbDelete("cosm_folders",id);
+}
+
+async function deleteFolder(id){
+  const counts=await countFolderContents(id);
+  const folder=await dbGet("cosm_folders",id);
+  const name=folder?.name||'this folder';
+  const parts=[];
+  if(counts.folders>0)parts.push(`${counts.folders} folder${counts.folders>1?'s':''}`);
+  if(counts.discourses>0)parts.push(`${counts.discourses} discourse${counts.discourses>1?'s':''}`);
+  if(counts.sparks>0)parts.push(`${counts.sparks} spark${counts.sparks>1?'s':''}`);
+  const summary=parts.length?` and ${parts.join(', ')} inside`:'';
+  if(!confirm(`Burn "${name}"${summary} to the Void?`))return false;
+  await deleteFolderRecursive(id);
+  return true;
+}
 
 /* DISCOURSES */
 async function getDiscourses(){const a=await dbGetAll("cosm_discourses");return a.filter(d=>!d.isDeleted).sort((a,b)=>b.updated_at-a.updated_at);}
@@ -1499,7 +1530,6 @@ function confirmAddRole(){
   showToast('Role anchored ◆');
 }
 
-
 function savePersonaPage(){
   const bio=document.getElementById('persona-bio').value.trim();
   const personality=document.getElementById('persona-personality').value.trim();
@@ -1674,7 +1704,8 @@ async function batchDelete(){
   const allC=await getCharacters();
   for(const id of selectedItems){
     if(allD.find(d=>d.id===id))await deleteDiscourse(id);
-    else if(allF.find(f=>f.id===id))await deleteFolder(id);
+    else if(allF.find(f=>f.id===id)){const deleted=await deleteFolder(id);if(!deleted)return;
+}
     else if(allC.find(c=>c.id===id))await deleteCharacter(id);
   }
   exitSelectMode();
