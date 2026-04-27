@@ -1331,7 +1331,7 @@ let _watcherCurrentLinks = [];
 
 function initWatcher() {
   try {
-    _watcherWorker = new Worker('watcher.worker.js', { type: 'module' });
+  _watcherWorker = new Worker('watcher.worker.js');
 
     _watcherWorker.onmessage = (e) => {
       const { id, type, result, error } = e.data;
