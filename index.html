@@ -1294,7 +1294,7 @@ Separate IndexedDB nq_watcher — never touches encrypted SQLite
 Vanilla JS cosine on Float32Array — zero external dependencies
 */
 
-const MODEL_ID = ‘Xenova/bge-small-en-v1.5’;
+const MODEL_ID = 'Xenova/bge-small-en-v1.5';
 const SIMILARITY_THRESHOLD = 0.82;
 const DECAY_ACTIVE_DAYS = 25;
 const LINK_EXPIRY_DAYS = 14;
@@ -1308,322 +1308,375 @@ let lastPassTime = 0;
 /* ── INDEXEDDB ─────────────────────────────────────────────── */
 
 function openWatcherDB() {
-return new Promise((resolve, reject) => {
-const req = indexedDB.open(‘nq_watcher’, 1);
-req.onupgradeneeded = (e) => {
-const db = e.target.result;
-if (!db.objectStoreNames.contains(‘embeddings’)) {
-const emb = db.createObjectStore(‘embeddings’, { keyPath: ‘id’ });
-emb.createIndex(‘last_seen_active’, ‘last_seen_active’, { unique: false });
-}
-if (!db.objectStoreNames.contains(‘links’)) {
-const lnk = db.createObjectStore(‘links’, { keyPath: ‘id’ });
-lnk.createIndex(‘created_at’, ‘created_at’, { unique: false });
-lnk.createIndex(‘a’, ‘a’, { unique: false });
-lnk.createIndex(‘b’, ‘b’, { unique: false });
-}
-};
-req.onsuccess = (e) => resolve(e.target.result);
-req.onerror = (e) => reject(e.target.error);
-});
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('nq_watcher', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('embeddings')) {
+        const emb = db.createObjectStore('embeddings', { keyPath: 'id' });
+        emb.createIndex('last_seen_active', 'last_seen_active', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('links')) {
+        const lnk = db.createObjectStore('links', { keyPath: 'id' });
+        lnk.createIndex('created_at', 'created_at', { unique: false });
+        lnk.createIndex('a', 'a', { unique: false });
+        lnk.createIndex('b', 'b', { unique: false });
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
 }
 
 const idb = {
-get: (store, key) => new Promise((res) => {
-const r = watcherDB.transaction(store, ‘readonly’).objectStore(store).get(key);
-r.onsuccess = () => res(r.result || null);
-r.onerror = () => res(null);
-}),
-put: (store, obj) => new Promise((res, rej) => {
-const r = watcherDB.transaction(store, ‘readwrite’).objectStore(store).put(obj);
-r.onsuccess = () => res();
-r.onerror = (e) => rej(e.target.error);
-}),
-delete: (store, key) => new Promise((res) => {
-const r = watcherDB.transaction(store, ‘readwrite’).objectStore(store).delete(key);
-r.onsuccess = () => res();
-r.onerror = () => res();
-}),
-getAll: (store) => new Promise((res) => {
-const r = watcherDB.transaction(store, ‘readonly’).objectStore(store).getAll();
-r.onsuccess = () => res(r.result || []);
-r.onerror = () => res([]);
-}),
-deleteOlderThan: (store, indexName, cutoff) => new Promise((res) => {
-const range = IDBKeyRange.upperBound(cutoff);
-const req = watcherDB.transaction(store, ‘readwrite’)
-.objectStore(store).index(indexName).openCursor(range);
-req.onsuccess = (e) => {
-const cursor = e.target.result;
-if (cursor) { cursor.delete(); cursor.continue(); } else res();
-};
-req.onerror = () => res();
-})
+  get: (store, key) => new Promise((res) => {
+    const r = watcherDB.transaction(store, 'readonly').objectStore(store).get(key);
+    r.onsuccess = () => res(r.result || null);
+    r.onerror = () => res(null);
+  }),
+  put: (store, obj) => new Promise((res, rej) => {
+    const r = watcherDB.transaction(store, 'readwrite').objectStore(store).put(obj);
+    r.onsuccess = () => res();
+    r.onerror = (e) => rej(e.target.error);
+  }),
+  delete: (store, key) => new Promise((res) => {
+    const r = watcherDB.transaction(store, 'readwrite').objectStore(store).delete(key);
+    r.onsuccess = () => res();
+    r.onerror = () => res();
+  }),
+  getAll: (store) => new Promise((res) => {
+    const r = watcherDB.transaction(store, 'readonly').objectStore(store).getAll();
+    r.onsuccess = () => res(r.result || []);
+    r.onerror = () => res([]);
+  }),
+  deleteOlderThan: (store, indexName, cutoff) => new Promise((res) => {
+    const range = IDBKeyRange.upperBound(cutoff);
+    const req = watcherDB.transaction(store, 'readwrite').objectStore(store).index(indexName).openCursor(range);
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) { cursor.delete(); cursor.continue(); } else res();
+    };
+    req.onerror = () => res();
+  })
 };
 
-/* ── SHA256 HASH — skip recompute if text unchanged ─────────── */
+/* ── SHA256 HASH ────────────────────────────────────────────── */
 
 async function sha256(text) {
-const buf = await crypto.subtle.digest(
-‘SHA-256’, new TextEncoder().encode(text)
-);
-return Array.from(new Uint8Array(buf))
-.map(b => b.toString(16).padStart(2, ‘0’)).join(’’);
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/* ── COSINE — pure Float32Array, zero allocations in loop ───── */
+/* ── COSINE ─────────────────────────────────────────────────── */
 
 function cosine(a, b) {
-let dot = 0, normA = 0, normB = 0;
-for (let i = 0; i < a.length; i++) {
-dot   += a[i] * b[i];
-normA += a[i] * a[i];
-normB += b[i] * b[i];
-}
-if (normA === 0 || normB === 0) return 0;
-return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot   += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-/* ── LOAD MODEL — importScripts, cached in Cache API ────────── */
+/* ── LOAD MODEL ─────────────────────────────────────────────── */
 
 async function loadModel() {
-try {
-// Classic worker style — no ES module import()
-importScripts(‘https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js’);
+  try {
+    importScripts('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
 
-```
-self.postMessage({ type: 'WATCHER_STATUS', status: 'loading' });
+    self.postMessage({ type: 'WATCHER_STATUS', status: 'loading' });
 
-// Use Cache API for model weights — survives worker restarts
-// BGE-Small requires this prefix for asymmetric/reasoning search
-self.Transformers.env.useBrowserCache = true;
-self.Transformers.env.backends.onnx.wasm.proxy = false;
+    self.Transformers.env.useBrowserCache = true;
+    self.Transformers.env.backends.onnx.wasm.proxy = false;
 
-embedder = await self.Transformers.pipeline(
-  'feature-extraction',
-  MODEL_ID,
-  {
-    quantized: true,
-    progress_callback: (progress) => {
-      if (progress.status === 'downloading') {
-        self.postMessage({
-          type: 'MODEL_PROGRESS',
-          loaded: Math.round((progress.loaded || 0) / 1024 / 1024),
-          total: Math.round((progress.total || 136 * 1024 * 1024) / 1024 / 1024)
-        });
+    embedder = await self.Transformers.pipeline(
+      'feature-extraction',
+      MODEL_ID,
+      {
+        quantized: true,
+        progress_callback: (progress) => {
+          if (progress.status === 'downloading') {
+            self.postMessage({
+              type: 'MODEL_PROGRESS',
+              loaded: Math.round((progress.loaded || 0) / 1024 / 1024),
+              total: Math.round((progress.total || 136 * 1024 * 1024) / 1024 / 1024)
+            });
+          }
+        }
       }
-    }
+    );
+
+    return true;
+  } catch (err) {
+    console.error('[Watcher] Model load failed:', err.message);
+    self.postMessage({ type: 'WATCHER_STATUS', status: 'error', reason: err.message });
+    return false;
   }
-);
-
-return true;
-```
-
-} catch (err) {
-console.error(’[Watcher] Model load failed:’, err.message);
-self.postMessage({ type: ‘WATCHER_STATUS’, status: ‘error’, reason: err.message });
-return false;
-}
 }
 
 /* ── EMBED ───────────────────────────────────────────────────── */
 
 async function embedDiscourse(id, text, lastSeenActive) {
-if (!embedder) throw new Error(‘Model not loaded’);
+  if (!embedder) throw new Error('Model not loaded');
 
-// BGE-Small needs this prefix for asymmetric reasoning search
-const normalized = ’Represent this sentence: ’ + text.trim().toLowerCase().slice(0, 2000);
-const hash = await sha256(normalized);
+  const normalized = 'Represent this sentence: ' + text.trim().toLowerCase().slice(0, 2000);
+  const hash = await sha256(normalized);
 
-const existing = await idb.get(‘embeddings’, id);
-if (existing && existing.hash === hash) {
-await idb.put(‘embeddings’, { …existing, last_seen_active: lastSeenActive || Date.now() });
-return { status: ‘skipped’, id };
-}
+  const existing = await idb.get('embeddings', id);
+  if (existing && existing.hash === hash) {
+    await idb.put('embeddings', { ...existing, last_seen_active: lastSeenActive || Date.now() });
+    return { status: 'skipped', id };
+  }
 
-const output = await embedder(normalized, { pooling: ‘mean’, normalize: true });
-const vector = Array.from(output.data);
+  const output = await embedder(normalized, { pooling: 'mean', normalize: true });
+  const vector = Array.from(output.data);
 
-await idb.put(‘embeddings’, {
-id,
-vector,
-hash,
-created_at: existing ? existing.created_at : Date.now(),
-last_seen_active: lastSeenActive || Date.now()
-});
+  await idb.put('embeddings', {
+    id,
+    vector,
+    hash,
+    created_at: existing ? existing.created_at : Date.now(),
+    last_seen_active: lastSeenActive || Date.now()
+  });
 
-return { status: ‘embedded’, id };
+  return { status: 'embedded', id };
 }
 
 /* ── NIGHTLY PASS ────────────────────────────────────────────── */
 
 async function runSimilarityPass() {
-const now = Date.now();
-const activeCutoff = now - (DECAY_ACTIVE_DAYS * DAY_MS);
-const linkExpiryCutoff = now - (LINK_EXPIRY_DAYS * DAY_MS);
+  const now = Date.now();
+  const activeCutoff = now - (DECAY_ACTIVE_DAYS * DAY_MS);
+  const linkExpiryCutoff = now - (LINK_EXPIRY_DAYS * DAY_MS);
 
-const allEmbeddings = await idb.getAll(‘embeddings’);
-const active = allEmbeddings.filter(e => e.last_seen_active > activeCutoff);
+  const allEmbeddings = await idb.getAll('embeddings');
+  const active = allEmbeddings.filter(e => e.last_seen_active > activeCutoff);
 
-if (active.length < 2) return { linksFound: 0, compared: 0 };
+  if (active.length < 2) return { linksFound: 0, compared: 0 };
 
-const recentCutoff = now - (7 * DAY_MS);
-const setA = active.filter(e => e.last_seen_active > recentCutoff);
-const setB = active;
+  const recentCutoff = now - (7 * DAY_MS);
+  const setA = active.filter(e => e.last_seen_active > recentCutoff);
+  const setB = active;
 
-let linksFound = 0, compared = 0;
+  let linksFound = 0, compared = 0;
 
-for (const a of setA) {
-const vecA = new Float32Array(a.vector);
-for (const b of setB) {
-if (a.id === b.id) continue;
-const score = cosine(vecA, new Float32Array(b.vector));
-compared++;
-if (score >= SIMILARITY_THRESHOLD) {
-const linkId = [a.id, b.id].sort().join(’_’);
-await idb.put(‘links’, {
-id: linkId,
-a: a.id,
-b: b.id,
-score: Math.round(score * 1000) / 1000,
-created_at: now
-});
-linksFound++;
-}
-}
-}
+  for (const a of setA) {
+    const vecA = new Float32Array(a.vector);
+    for (const b of setB) {
+      if (a.id === b.id) continue;
+      const score = cosine(vecA, new Float32Array(b.vector));
+      compared++;
+      if (score >= SIMILARITY_THRESHOLD) {
+        const linkId = [a.id, b.id].sort().join('_');
+        await idb.put('links', {
+          id: linkId,
+          a: a.id,
+          b: b.id,
+          score: Math.round(score * 1000) / 1000,
+          created_at: now
+        });
+        linksFound++;
+      }
+    }
+  }
 
-await idb.deleteOlderThan(‘links’, ‘created_at’, linkExpiryCutoff);
+  await idb.deleteOlderThan('links', 'created_at', linkExpiryCutoff);
 
-for (const e of active) {
-await idb.put(‘embeddings’, { …e, last_seen_active: now });
-}
+  for (const e of active) {
+    await idb.put('embeddings', { ...e, last_seen_active: now });
+  }
 
-lastPassTime = now;
-return { linksFound, compared, activeCount: active.length };
+  lastPassTime = now;
+  return { linksFound, compared, activeCount: active.length };
 }
 
 /* ── GET LINKS ───────────────────────────────────────────────── */
 
 async function getLinksForDiscourse(discourseId) {
-const all = await idb.getAll(‘links’);
-return all
-.filter(l => l.a === discourseId || l.b === discourseId)
-.map(l => ({ linkedId: l.a === discourseId ? l.b : l.a, score: l.score }));
+  const all = await idb.getAll('links');
+  return all
+    .filter(l => l.a === discourseId || l.b === discourseId)
+    .map(l => ({ linkedId: l.a === discourseId ? l.b : l.a, score: l.score }));
 }
 
 async function getAllActiveLinks() {
-return await idb.getAll(‘links’);
+  return await idb.getAll('links');
 }
 
 /* ── PRUNE ───────────────────────────────────────────────────── */
 
 async function pruneDiscourse(id) {
-await idb.delete(‘embeddings’, id);
-const all = await idb.getAll(‘links’);
-for (const link of all) {
-if (link.a === id || link.b === id) await idb.delete(‘links’, link.id);
-}
-return { pruned: id };
+  await idb.delete('embeddings', id);
+  const all = await idb.getAll('links');
+  for (const link of all) {
+    if (link.a === id || link.b === id) await idb.delete('links', link.id);
+  }
+  return { pruned: id };
 }
 
 /* ── MESSAGE HANDLER ─────────────────────────────────────────── */
 
 self.onmessage = async (e) => {
-const { id, type, data } = e.data;
-const reply = (result, error) =>
-self.postMessage({ id, type: type + ‘_REPLY’, result, error: error?.message });
+  const { id, type, data } = e.data;
+  const reply = (result, error) =>
+    self.postMessage({ id, type: type + '_REPLY', result, error: error?.message });
 
-try {
-switch (type) {
-
-```
-  case 'EMBED': {
-    if (!isReady) { reply(null, new Error('NOT_READY')); return; }
-    reply(await embedDiscourse(data.id, data.text, data.lastSeenActive));
-    break;
-  }
-
-  case 'RUN_PASS': {
-    if (!isReady) { reply(null, new Error('NOT_READY')); return; }
-    reply(await runSimilarityPass());
-    break;
-  }
-
-  case 'GET_LINKS': {
-    if (!watcherDB) { reply([]); return; }
-    if (data && data.discourseId) {
-      reply(await getLinksForDiscourse(data.discourseId));
-    } else {
-      reply(await getAllActiveLinks());
+  try {
+    switch (type) {
+      case 'EMBED': {
+        if (!isReady) { reply(null, new Error('NOT_READY')); return; }
+        reply(await embedDiscourse(data.id, data.text, data.lastSeenActive));
+        break;
+      }
+      case 'RUN_PASS': {
+        if (!isReady) { reply(null, new Error('NOT_READY')); return; }
+        reply(await runSimilarityPass());
+        break;
+      }
+      case 'GET_LINKS': {
+        if (!watcherDB) { reply([]); return; }
+        if (data && data.discourseId) {
+          reply(await getLinksForDiscourse(data.discourseId));
+        } else {
+          reply(await getAllActiveLinks());
+        }
+        break;
+      }
+      case 'PRUNE': {
+        if (!watcherDB) { reply(null); return; }
+        reply(await pruneDiscourse(data.id));
+        break;
+      }
+      case 'UPDATE_ACTIVE': {
+        if (!watcherDB) { reply(null); return; }
+        const now = Date.now();
+        for (const discId of (data?.ids || [])) {
+          const existing = await idb.get('embeddings', discId);
+          if (existing) await idb.put('embeddings', { ...existing, last_seen_active: now });
+        }
+        reply({ updated: data?.ids?.length || 0 });
+        break;
+      }
+      case 'GET_STATS': {
+        if (!watcherDB) { reply({ embeddings: 0, links: 0, ready: false }); return; }
+        const embs = await idb.getAll('embeddings');
+        const lnks = await idb.getAll('links');
+        reply({ embeddings: embs.length, links: lnks.length, lastPass: lastPassTime, ready: isReady });
+        break;
+      }
+      default:
+        reply(null, new Error('UNKNOWN: ' + type));
     }
-    break;
+  } catch (err) {
+    console.error('[Watcher] Handler error:', err);
+    reply(null, err);
   }
-
-  case 'PRUNE': {
-    if (!watcherDB) { reply(null); return; }
-    reply(await pruneDiscourse(data.id));
-    break;
-  }
-
-  case 'UPDATE_ACTIVE': {
-    if (!watcherDB) { reply(null); return; }
-    const now = Date.now();
-    for (const discId of (data?.ids || [])) {
-      const existing = await idb.get('embeddings', discId);
-      if (existing) await idb.put('embeddings', { ...existing, last_seen_active: now });
-    }
-    reply({ updated: data?.ids?.length || 0 });
-    break;
-  }
-
-  case 'GET_STATS': {
-    if (!watcherDB) { reply({ embeddings: 0, links: 0, ready: false }); return; }
-    const embs = await idb.getAll('embeddings');
-    const lnks = await idb.getAll('links');
-    reply({ embeddings: embs.length, links: lnks.length, lastPass: lastPassTime, ready: isReady });
-    break;
-  }
-
-  default:
-    reply(null, new Error('UNKNOWN: ' + type));
-}
-```
-
-} catch (err) {
-console.error(’[Watcher] Handler error:’, err);
-reply(null, err);
-}
 };
 
 /* ── BOOT ────────────────────────────────────────────────────── */
 
 async function init() {
-try {
-watcherDB = await openWatcherDB();
+  try {
+    watcherDB = await openWatcherDB();
 
-let loaded = await loadModel();
-if (!loaded) {
-  await new Promise(r => setTimeout(r, 5000));
-  loaded = await loadModel();
+    let loaded = await loadModel();
+    if (!loaded) {
+      await new Promise(r => setTimeout(r, 5000));
+      loaded = await loadModel();
+    }
+
+    if (!loaded) {
+      self.postMessage({ type: 'ERROR', reason: 'MODEL_LOAD_FAIL' });
+      return;
+    }
+
+    isReady = true;
+    self.postMessage({ type: 'READY' });
+    self.postMessage({ type: 'WATCHER_STATUS', status: 'ready' });
+
+  } catch (err) {
+    console.error('[Watcher] Boot failed:', err);
+    self.postMessage({ type: 'ERROR', reason: err.message });
+  }
 }
 
-if (!loaded) {
-  self.postMessage({ type: 'ERROR', reason: 'MODEL_LOAD_FAIL' });
-  return;
+init();
+`;
+
+let _watcherWorker = null;
+let _watcherReady = false;
+let _watcherPending = {};
+let _watcherMsgId = 0;
+
+// 8 safe anchor positions -- avoid header (top 56px), bottom bar (bottom 80px)
+// avoid right edge (header buttons), avoid left edge (gold thread zone)
+const WATCHER_ANCHORS = [
+  { top: '72px',  left: '50%'  },   // below header, center
+  { top: '72px',  right: '52px' },  // below header, right safe zone
+  { top: '30%',   right: '16px' },  // mid-right
+  { top: '50%',   right: '16px' },  // center-right
+  { top: '70%',   right: '16px' },  // lower-right
+  { top: '30%',   left: '40px' },   // mid-left (clear of gold thread)
+  { top: '50%',   left: '40px' },   // center-left
+  { bottom: '90px', left: '50%' },  // above bottom bar, center
+];
+
+let _watcherCurrentAnchor = -1;
+let _watcherHasLinks = false;
+let _watcherCurrentLinks = [];
+
+function initWatcher() {
+  try {
+    const blob = new Blob([WATCHER_CODE], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    _watcherWorker = new Worker(url);
+
+    _watcherWorker.onmessage = (e) => {
+      const { id, type, result, error } = e.data;
+
+      if (id && _watcherPending[id]) {
+        if (error) _watcherPending[id].reject(new Error(error));
+        else _watcherPending[id].resolve(result);
+        delete _watcherPending[id];
+        return;
+      }
+
+      if (type === 'READY') {
+        _watcherReady = true;
+        console.log('[Watcher] Ready');
+        scheduleWatcherPass();
+      }
+
+      if (type === 'WATCHER_STATUS') {
+        if (result?.status === 'loading' || e.data.status === 'loading') {
+          showToast('◈ Watcher awakening...');
+        } else if (result?.status === 'ready' || e.data.status === 'ready') {
+          showToast('◈ Watcher ready');
+        }
+      }
+
+      if (type === 'MODEL_PROGRESS') {
+        const loaded = e.data.loaded || 0;
+        const total = e.data.total || 136;
+        showToast('◈ Watcher ' + loaded + '/' + total + 'mb');
+      }
+
+      if (type === 'ERROR') {
+        console.warn('[Watcher] Error:', e.data.reason);
+      }
+    };
+
+    _watcherWorker.onerror = (err) => {
+      console.warn('[Watcher] Crashed:', err.message);
+      setTimeout(() => initWatcher(), 3000);
+    };
+
+  } catch (err) {
+    console.warn('[Watcher] Could not start:', err);
+  }
 }
-
-isReady = true;
-self.postMessage({ type: 'READY' });
-self.postMessage({ type: 'WATCHER_STATUS', status: 'ready' });
-
-
-} catch (err) {
-console.error(’[Watcher] Boot failed:’, err);
-self.postMessage({ type: ‘ERROR’, reason: err.message });
-}
-}
-
 init();
 `;
 
@@ -1725,7 +1778,6 @@ _watcherWorker.onerror = (err) => {
   console.warn('[Watcher] Crashed:', err.message);
   setTimeout(() => initWatcher(), 3000);
 };
-```
 
 } catch (err) {
 console.warn(’[Watcher] Could not start:’, err);
