@@ -1602,7 +1602,6 @@ async function init() {
 try {
 watcherDB = await openWatcherDB();
 
-```
 let loaded = await loadModel();
 if (!loaded) {
   await new Promise(r => setTimeout(r, 5000));
@@ -1617,7 +1616,7 @@ if (!loaded) {
 isReady = true;
 self.postMessage({ type: 'READY' });
 self.postMessage({ type: 'WATCHER_STATUS', status: 'ready' });
-```
+
 
 } catch (err) {
 console.error(’[Watcher] Boot failed:’, err);
@@ -1686,7 +1685,7 @@ const blob = new Blob([WATCHER_CODE], { type: ‘application/javascript’ });
 const url = URL.createObjectURL(blob);
 _watcherWorker = new Worker(url);
 
-```
+
 _watcherWorker.onmessage = (e) => {
   const { id, type, result, error } = e.data;
 
