@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.25.5_watcher_test</title>
+<title>NakedQuantum v0.26</title>
 <style>
 :root {
   --bg: #000000;
@@ -516,6 +516,7 @@ select.cosm-input {
 .bar-pill.danger { border-color: var(--danger); }
 
 </style>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/transformers.min.js">
 </head>
 <body>
 <canvas id="firefly-canvas"></canvas>
@@ -889,6 +890,9 @@ select.cosm-input {
       <button onclick="backupToAkashic()" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); flex:1; height:40px; border-radius:8px; font-weight:700; font-size:11px;">Push to R2</button>
       <button onclick="restoreFromAkashic()" style="background:#1a0000; color:var(--danger); border:1px solid #330000; flex:1; height:40px; border-radius:8px; font-weight:900; font-size:11px;">Pull from R2</button>
     </div>
+<div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">◈ The Watcher</label>
+    <p id="watcher-status" style="font-size:10px;color:var(--muted);margin:8px 0 0;">dormant</p>
   </div>
 
   <div class="modal-buttons" style="margin-top:25px;">
@@ -1173,26 +1177,48 @@ self.onmessage = async (e) => {
 };
 `;
 
-const WATCHER_CODE = `
-/* WATCHER v2.0 -- NakedQuantum */
-importScripts('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/transformers.min.js');
-const T = self.transformers;
-const MODEL_ID = 'Xenova/bge-base-en-v1.5';
-const SIMILARITY_THRESHOLD = 0.82;
-const DECAY_ACTIVE_DAYS = 25;
-const LINK_EXPIRY_DAYS = 60;
-const SILENT_PERIOD_HOURS = 48;
-const TITLE_WEIGHT = 0.3;
-const BODY_WEIGHT = 0.7;
-const SPARK_BOOST = 1.1;
-const TEMPORAL_BOOST_MAX = 0.15;
-const RECENT_DAYS = 7;
-const DAY_MS = 86400000;
+let _id = 0;
+const _pending = {};
+let _worker = null;
+let _workerReady = null;
 
-let embedder = null;
+function initWorker(){
+  const workerBlob = new Blob([WORKER_CODE], { type: 'application/javascript' });
+  const workerUrl = URL.createObjectURL(workerBlob);
+  _worker = new Worker(workerUrl);
+
+  _worker.onmessage = e => {
+    const { id, result, error } = e.data;
+    if (_pending[id]) {
+      if (error) _pending[id].reject(new Error(error));
+      else _pending[id].resolve(result);
+      delete _pending[id];
+    }
+  };
+
+  _workerReady = new Promise((res, rej) => {
+    const msgId = ++_id;
+    _pending[msgId] = { resolve: res, reject: rej };
+    _worker.postMessage({ id: msgId, action: 'INIT' });
+  });
+}
+
+/* ── WATCHER ENGINE (MAIN THREAD SHADOW QUEUE) ──────────────── */
+const W_MODEL_ID = 'Xenova/bge-base-en-v1.5';
+const W_SIMILARITY_THRESHOLD = 0.82;
+const W_DECAY_ACTIVE_DAYS = 25;
+const W_LINK_EXPIRY_DAYS = 60;
+const W_SILENT_PERIOD_HOURS = 48;
+const W_TITLE_WEIGHT = 0.3;
+const W_BODY_WEIGHT = 0.7;
+const W_SPARK_BOOST = 1.1;
+const W_DAY_MS = 86400000;
+
+let watcherEmbedder = null;
 let watcherDB = null;
-let isReady = false;
-let lastPassTime = 0;
+let isWatcherReady = false;
+let watcherQueue = [];
+let isWatcherProcessing = false;
 
 function openWatcherDB() {
   return new Promise((resolve, reject) => {
@@ -1215,11 +1241,11 @@ function openWatcherDB() {
   });
 }
 
-const idb = {
+const wdb = {
   get: (store, key) => new Promise((res) => { const r = watcherDB.transaction(store, 'readonly').objectStore(store).get(key); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }),
   put: (store, obj) => new Promise((res, rej) => { const r = watcherDB.transaction(store, 'readwrite').objectStore(store).put(obj); r.onsuccess = () => res(); r.onerror = (e) => rej(e.target.error); }),
   delete: (store, key) => new Promise((res) => { const r = watcherDB.transaction(store, 'readwrite').objectStore(store).delete(key); r.onsuccess = () => res(); r.onerror = () => res(); }),
-  getAll: (store) => new Promise((res) => { const r = watcherDB.transaction(store, 'readonly').objectStore(store).getAll(); r.onsuccess = () => res(r.result ||[]); r.onerror = () => res([]); }),
+  getAll: (store) => new Promise((res) => { const r = watcherDB.transaction(store, 'readonly').objectStore(store).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }),
   deleteOlderThan: (store, indexName, cutoff) => new Promise((res) => {
     const range = IDBKeyRange.upperBound(cutoff);
     const req = watcherDB.transaction(store, 'readwrite').objectStore(store).index(indexName).openCursor(range);
@@ -1228,271 +1254,168 @@ const idb = {
   })
 };
 
-async function sha256(text) {
+async function watcherSha256(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function cosine(a, b) {
+function watcherCosine(a, b) {
   let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; normA += a[i] * a[i]; normB += b[i] * b[i]; }
   if (normA === 0 || normB === 0) return 0;
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-async function loadModel() {
-  try {
-    const T = self.Transformers || self.transformers;
-    self.postMessage({ type: 'WATCHER_STATUS', status: 'loading' });
-    T.env.useBrowserCache = true;
-    T.env.allowLocalModels = false;
-    
-    // SENSEI'S FIX: Force WASM path to CDN
-    T.env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/';
-    
-    embedder = await T.pipeline('feature-extraction', MODEL_ID, {
-      quantized: true,
-      progress_callback: (progress) => {
-        if (progress.status === 'downloading') {
-          self.postMessage({ type: 'MODEL_PROGRESS', loaded: Math.round((progress.loaded || 0) / 1024 / 1024), total: Math.round((progress.total || 136 * 1024 * 1024) / 1024 / 1024) });
-        }
-      }
-    });
-    return true;
-  } catch (err) {
-    self.postMessage({ type: 'WATCHER_STATUS', status: 'error', reason: err.message });
-    return false;
-  }
-}
-
-async function embedDiscourse(id, title, body, itemType, lastSeenActive) {
-  if (!embedder) throw new Error('Model not loaded');
-  const titleText = 'Represent this sentence: ' + title.trim().toLowerCase();
-  const bodyText = 'Represent this sentence: ' + body.trim().toLowerCase().slice(0, 2000);
-  const hash = await sha256(titleText + '|||' + bodyText);
-  const existing = await idb.get('embeddings', id);
-  
-  if (existing && existing.hash === hash) {
-    await idb.put('embeddings', { ...existing, last_seen_active: lastSeenActive || Date.now() });
-    return { status: 'skipped', id };
-  }
-  
-  const titleEmb = await embedder(titleText, { pooling: 'mean', normalize: true });
-  const bodyEmb = await embedder(bodyText, { pooling: 'mean', normalize: true });
-  const tv = titleEmb.data, bv = bodyEmb.data;
-  const combined = new Float32Array(tv.length);
-  for (let i = 0; i < tv.length; i++) combined[i] = TITLE_WEIGHT * tv[i] + BODY_WEIGHT * bv[i];
-  let norm = 0;
-  for (let i = 0; i < combined.length; i++) norm += combined[i] * combined[i];
-  norm = Math.sqrt(norm);
-  if (norm > 0) for (let i = 0; i < combined.length; i++) combined[i] /= norm;
-  
-  await idb.put('embeddings', { id, vector: Array.from(combined), hash, created_at: existing ? existing.created_at : Date.now(), last_seen_active: lastSeenActive || Date.now(), item_type: itemType });
-  return { status: 'embedded', id };
-}
-
-async function runSimilarityPass() {
-  const now = Date.now();
-  const activeCutoff = now - (DECAY_ACTIVE_DAYS * DAY_MS);
-  const linkExpiryCutoff = now - (LINK_EXPIRY_DAYS * DAY_MS);
-  const silentCutoff = now - (SILENT_PERIOD_HOURS * 3600000);
-  const allEmbeddings = await idb.getAll('embeddings');
-  
-  const active = allEmbeddings.filter(e => e.last_seen_active > activeCutoff);
-  if (active.length < 2) return { linksFound: 0, compared: 0 };
-  
-  const recentCutoff = now - (RECENT_DAYS * DAY_MS);
-  const setA = active.filter(e => e.last_seen_active > recentCutoff && e.created_at < silentCutoff);
-  const setB = active;
-  let linksFound = 0, compared = 0;
-  
-  for (const a of setA) {
-    const vecA = new Float32Array(a.vector);
-    for (const b of setB) {
-      if (a.id === b.id) continue;
-      const score = cosine(vecA, new Float32Array(b.vector));
-      const finalScore = score * (a.item_type === 'note' || b.item_type === 'note' ? SPARK_BOOST : 1.0);
-      compared++;
-      if (finalScore >= SIMILARITY_THRESHOLD) {
-        const linkId =[a.id, b.id].sort().join('_');
-        await idb.put('links', { id: linkId, a: a.id, b: b.id, score: Math.round(finalScore * 1000) / 1000, created_at: now });
-        linksFound++;
-      }
-    }
-  }
-  
-  await idb.deleteOlderThan('links', 'created_at', linkExpiryCutoff);
-  for (const e of active) { await idb.put('embeddings', { ...e, last_seen_active: now }); }
-  lastPassTime = now;
-  return { linksFound, compared, activeCount: active.length };
-}
-
-async function getLinksForDiscourse(discourseId) {
-  const all = await idb.getAll('links');
-  return all.filter(l => l.a === discourseId || l.b === discourseId).map(l => ({ linkedId: l.a === discourseId ? l.b : l.a, score: l.score }));
-}
-async function getAllActiveLinks() { return await idb.getAll('links'); }
-async function pruneDiscourse(id) {
-  await idb.delete('embeddings', id);
-  const all = await idb.getAll('links');
-  for (const link of all) { if (link.a === id || link.b === id) await idb.delete('links', link.id); }
-  return { pruned: id };
-}
-
-self.onmessage = async (e) => {
-  const { id, type, data } = e.data;
-  const reply = (result, error) => self.postMessage({ id, type: type + '_REPLY', result, error: error?.message });
-  try {
-    switch (type) {
-      case 'EMBED': { if (!isReady) { reply(null, new Error('NOT_READY')); return; } reply(await embedDiscourse(data.id, data.title, data.body, data.itemType, data.lastSeenActive)); break; }
-      case 'RUN_PASS': { if (!isReady) { reply(null, new Error('NOT_READY')); return; } reply(await runSimilarityPass()); break; }
-      case 'GET_LINKS': { if (!watcherDB) { reply([]); return; } if (data && data.discourseId) { reply(await getLinksForDiscourse(data.discourseId)); } else { reply(await getAllActiveLinks()); } break; }
-      case 'PRUNE': { if (!watcherDB) { reply(null); return; } reply(await pruneDiscourse(data.id)); break; }
-      case 'GET_STATS': { if (!watcherDB) { reply({ embeddings: 0, links: 0, ready: false }); return; } const embs = await idb.getAll('embeddings'); const lnks = await idb.getAll('links'); reply({ embeddings: embs.length, links: lnks.length, lastPass: lastPassTime, ready: isReady }); break; }
-      default: reply(null, new Error('UNKNOWN: ' + type));
-    }
-  } catch (err) { self.postMessage({ id, type: 'ERROR', result: null, error: err.message }); }
-};
-
-async function init() {
-  try {
-    watcherDB = await openWatcherDB();
-    let loaded = await loadModel();
-    if (!loaded) { self.postMessage({ type: 'ERROR', reason: 'MODEL_LOAD_FAIL' }); return; }
-    isReady = true;
-    self.postMessage({ type: 'READY' });
-  } catch (err) { self.postMessage({ type: 'ERROR', reason: err.message }); }
-}
-init();
-`;
-
-/* ── WATCHER LOADING INDICATOR ──────────────────────────────── */
 function showWatcherLoading() {
   const dot = document.getElementById('watcher-loading-dot');
-  if (dot) { 
-    dot.style.display = 'block'; 
-    dot.classList.add('visible'); 
-  }
+  if (dot) { dot.style.display = 'block'; void dot.offsetWidth; dot.classList.add('visible'); }
 }
 
 function hideWatcherLoading() {
   const dot = document.getElementById('watcher-loading-dot');
-  if (dot) { 
-    dot.classList.remove('visible'); 
-    setTimeout(() => { dot.style.display = 'none'; }, 1000); 
-  }
+  if (dot) { dot.classList.remove('visible'); setTimeout(() => { dot.style.display = 'none'; }, 1000); }
 }
 
 function updateWatcherLoading(loaded, total) {
   const dot = document.getElementById('watcher-loading-dot');
   if (dot) dot.style.opacity = 0.3 + (loaded / Math.max(total, 1)) * 0.7;
 }
-/* ───────────────────────────────────────────────────────────── */
 
+async function updateWatcherStatusUI() {
+  if (!watcherDB) return;
+  const embs = await wdb.getAll('embeddings');
+  const el = document.getElementById('watcher-status');
+  if (el) el.textContent = 'active · ' + embs.length + ' engrams indexed';
+}
 
-let _watcherWorker = null;
-let _watcherReady = false;
-let _watcherPending = {};
-let _watcherMsgId = 0;
+async function shouldWatcherShow() {
+  if (!watcherDB) return false;
+  const embs = await wdb.getAll('embeddings');
+  const rich = embs.filter(e => (e.word_count || 0) >= 80);
+  return rich.length >= 5;
+}
 
-function initWatcher() {
+async function initWatcher() {
   try {
-    const blob = new Blob([WATCHER_CODE], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(blob);
-    // Standard worker, NO module type!
-    _watcherWorker = new Worker(workerUrl); 
-
-    _watcherWorker.onmessage = (e) => {
-      const { id, type, result, error } = e.data;
-      if (id && _watcherPending[id]) {
-        if (error) _watcherPending[id].reject(new Error(error));
-        else _watcherPending[id].resolve(result);
-        delete _watcherPending[id];
-        return;
-      }
-      if (type === 'READY') {
-        _watcherReady = true;
-        const firstAwakening = !localStorage.getItem('nq_watcher_awakened');
-        if (firstAwakening) {
-          localStorage.setItem('nq_watcher_awakened', '1');
-          showToast('◈ The Watcher has awakened');
+    watcherDB = await openWatcherDB();
+    showWatcherLoading();
+    const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/transformers.min.js');
+    env.useBrowserCache = true;
+    env.allowLocalModels = false;
+    env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/';
+    watcherEmbedder = await pipeline('feature-extraction', W_MODEL_ID, {
+      quantized: true,
+      progress_callback: (progress) => {
+        if (progress.status === 'downloading') {
+          updateWatcherLoading(Math.round((progress.loaded || 0) / 1024 / 1024), Math.round((progress.total || 136 * 1024 * 1024) / 1024 / 1024));
         }
-        hideWatcherLoading();
-        scheduleWatcherPass();
       }
-      if (type === 'WATCHER_STATUS') {
-        if (e.data.status === 'loading' || result?.status === 'loading') showWatcherLoading();
-        else hideWatcherLoading();
-      }
-      if (type === 'MODEL_PROGRESS') {
-        updateWatcherLoading(e.data.loaded || 0, e.data.total || 136);
-      }
-      if (type === 'ERROR') {
-        console.warn('[Watcher] Error:', e.data.reason);
-        hideWatcherLoading();
-      }
-    };
-
-    _watcherWorker.onerror = (err) => {
-      console.warn('[Watcher] Crashed:', err.message);
-      hideWatcherLoading();
-    };
-
+    });
+    isWatcherReady = true;
+    const firstAwakening = !localStorage.getItem('nq_watcher_awakened');
+    if (firstAwakening) {
+      localStorage.setItem('nq_watcher_awakened', '1');
+      showToast('◈ The Watcher has awakened');
+    }
+    hideWatcherLoading();
+    updateWatcherStatusUI();
+    scheduleWatcherPass();
   } catch (err) {
-    console.warn('[Watcher] Could not start:', err);
+    console.warn('[Watcher] Init Failed:', err);
+    hideWatcherLoading();
   }
 }
 
-let _id = 0;
-const _pending = {};
-let _worker = null;
-let _workerReady = null;
+function queueWatcherEmbed(id, title, body, itemType) {
+  if (!isWatcherReady) return;
+  watcherQueue.push({ id, title, body, itemType, lastSeenActive: Date.now() });
+  if (!isWatcherProcessing) processWatcherQueue();
+}
 
-function watcherPost(type, data) {
-  return new Promise((resolve) => {
-    if (!_watcherWorker) { resolve(null); return; }
-    const msgId = ++_watcherMsgId;
-    _watcherPending[msgId] = { resolve, reject: () => resolve(null) };
-    _watcherWorker.postMessage({ id: msgId, type, data });
-    setTimeout(() => {
-      if (_watcherPending[msgId]) { delete _watcherPending[msgId]; resolve(null); }
-    }, 60000); // 60s timeout for heavy embedding tasks
-  });
+async function processWatcherQueue() {
+  if (isWatcherProcessing || watcherQueue.length === 0) return;
+  isWatcherProcessing = true;
+  while (watcherQueue.length > 0) {
+    const item = watcherQueue.shift();
+    try {
+      await embedDiscourseMain(item.id, item.title, item.body, item.itemType, item.lastSeenActive);
+    } catch (e) { console.warn('Watcher Embed Error', e); }
+    await new Promise(r => setTimeout(r, 250));
+  }
+  updateWatcherStatusUI();
+  isWatcherProcessing = false;
+}
+
+async function embedDiscourseMain(id, title, body, itemType, lastSeenActive) {
+  if (!watcherEmbedder) return;
+  const wordCount = body.trim().split(/\s+/).filter(Boolean).length;
+  const titleText = 'Represent this sentence: ' + title.trim().toLowerCase();
+  const bodyText = 'Represent this sentence: ' + body.trim().toLowerCase().slice(0, 2000);
+  const hash = await watcherSha256(titleText + '|||' + bodyText);
+  const existing = await wdb.get('embeddings', id);
+  if (existing && existing.hash === hash) {
+    await wdb.put('embeddings', { ...existing, last_seen_active: lastSeenActive, word_count: wordCount });
+    return;
+  }
+  const titleEmb = await watcherEmbedder(titleText, { pooling: 'mean', normalize: true });
+  await new Promise(r => setTimeout(r, 10));
+  const bodyEmb = await watcherEmbedder(bodyText, { pooling: 'mean', normalize: true });
+  const tv = titleEmb.data, bv = bodyEmb.data;
+  const combined = new Float32Array(tv.length);
+  for (let i = 0; i < tv.length; i++) combined[i] = W_TITLE_WEIGHT * tv[i] + W_BODY_WEIGHT * bv[i];
+  let norm = 0;
+  for (let i = 0; i < combined.length; i++) norm += combined[i] * combined[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) for (let i = 0; i < combined.length; i++) combined[i] /= norm;
+  await wdb.put('embeddings', { id, vector: Array.from(combined), hash, created_at: existing ? existing.created_at : Date.now(), last_seen_active: lastSeenActive, item_type: itemType, word_count: wordCount });
+}
+
+async function runSimilarityPassMain() {
+  const now = Date.now();
+  const activeCutoff = now - (W_DECAY_ACTIVE_DAYS * W_DAY_MS);
+  const linkExpiryCutoff = now - (W_LINK_EXPIRY_DAYS * W_DAY_MS);
+  const silentCutoff = now - (W_SILENT_PERIOD_HOURS * 3600000);
+  const allEmbeddings = await wdb.getAll('embeddings');
+  const active = allEmbeddings.filter(e => e.last_seen_active > activeCutoff);
+  if (active.length < 2) return;
+  const setA = active.filter(e => e.last_seen_active > (now - (7 * W_DAY_MS)) && e.created_at < silentCutoff);
+  const setB = active;
+  for (let i = 0; i < setA.length; i++) {
+    const a = setA[i];
+    const vecA = new Float32Array(a.vector);
+    for (let j = 0; j < setB.length; j++) {
+      const b = setB[j];
+      if (a.id === b.id) continue;
+      const score = watcherCosine(vecA, new Float32Array(b.vector));
+      const finalScore = score * (a.item_type === 'note' || b.item_type === 'note' ? W_SPARK_BOOST : 1.0);
+      if (finalScore >= W_SIMILARITY_THRESHOLD) {
+        const linkId = [a.id, b.id].sort().join('_');
+        await wdb.put('links', { id: linkId, a: a.id, b: b.id, score: Math.round(finalScore * 1000) / 1000, created_at: now });
+      }
+    }
+    if (i % 5 === 0) await new Promise(r => setTimeout(r, 20));
+  }
+  await wdb.deleteOlderThan('links', 'created_at', linkExpiryCutoff);
+  for (const e of active) { await wdb.put('embeddings', { ...e, last_seen_active: now }); }
+  localStorage.setItem('nq_watcher_last_pass', now.toString());
+  updateWatcherStatusUI();
 }
 
 function scheduleWatcherPass() {
-  if (!_watcherReady) return;
+  if (!isWatcherReady) return;
   const lastRun = parseInt(localStorage.getItem('nq_watcher_last_pass') || '0');
   const hoursSince = (Date.now() - lastRun) / 3600000;
   if (hoursSince > 20) {
-    watcherPost('RUN_PASS', {}).then(result => {
-      if (result) {
-        localStorage.setItem('nq_watcher_last_pass', Date.now().toString());
-        console.log("Watcher Pass Complete:", result);
-      }
-    }).catch(() => {});
+    setTimeout(() => runSimilarityPassMain(), 10000);
   }
 }
 
-function initWorker(){
-  const workerBlob = new Blob([WORKER_CODE], { type: 'application/javascript' });
-  const workerUrl = URL.createObjectURL(workerBlob);
-  _worker = new Worker(workerUrl);
-
-  _worker.onmessage = e => {
-    const { id, result, error } = e.data;
-    if (_pending[id]) {
-      if (error) _pending[id].reject(new Error(error));
-      else _pending[id].resolve(result);
-      delete _pending[id];
-    }
-  };
-
-  _workerReady = new Promise((res, rej) => {
-    const msgId = ++_id;
-    _pending[msgId] = { resolve: res, reject: rej };
-    _worker.postMessage({ id: msgId, action: 'INIT' });
-  });
+async function pruneWatcherDiscourse(id) {
+  if (!watcherDB) return;
+  await wdb.delete('embeddings', id);
+  const all = await wdb.getAll('links');
+  for (const link of all) { if (link.a === id || link.b === id) await wdb.delete('links', link.id); }
+  updateWatcherStatusUI();
 }
 
 /* DB HELPERS */
@@ -1520,7 +1443,6 @@ const setEncryptionKey = (keyBytes) => _workerReady.then(() => new Promise((res,
   const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
   _worker.postMessage({ id: msgId, action: 'SET_KEY', data: { keyBytes: Array.from(keyBytes) } });
 }));
-
 
 /* FOLDERS */
 const getFolders=()=>dbGetAll("cosm_folders");
@@ -1587,7 +1509,8 @@ async function createDiscourse({title="Untitled Discourse", raw_text="", folder_
 
 async function updateDiscourse(id,updates){const disc=await getDiscourse(id);if(!disc)return;const u={...disc,...updates,updated_at:Date.now()};await dbPut("cosm_discourses",u);return u;}
 async function deleteDiscourse(id){const d=await getDiscourse(id);if(!d)return;await dbPut("cosm_discourses",{...d,isDeleted:true,deleted_at:Date.now()});}
-async function purgeDiscourse(id){await dbDelete("cosm_discourses",id);if(_watcherReady){watcherPost('PRUNE',{id}).catch(()=>{});}const t=await dbGetByIndex("cosm_mosaic_tiles","discourse_id",id);for(const x of t)await dbDelete("cosm_mosaic_tiles",x.id);const b=await dbGetByIndex("cosm_backlinks","discourse_id",id);for(const x of b)await dbDelete("cosm_backlinks",x.id);}
+
+async function purgeDiscourse(id){await dbDelete("cosm_discourses",id);if(isWatcherReady) pruneWatcherDiscourse(id);const t=await dbGetByIndex("cosm_mosaic_tiles","discourse_id",id);for(const x of t)await dbDelete("cosm_mosaic_tiles",x.id);const b=await dbGetByIndex("cosm_backlinks","discourse_id",id);for(const x of b)await dbDelete("cosm_backlinks",x.id);}
 async function restoreDiscourse(id){const d=await getDiscourse(id);if(!d)return;const{isDeleted,deleted_at,...rest}=d;await dbPut("cosm_discourses",{...rest,updated_at:Date.now()});}
 
 /* CHARACTERS */
@@ -1837,8 +1760,8 @@ async function confirmBurnDisc(){
   const title=`${char.name} -- ${date}`;
   
   // 1. Await the creation
-  const engramDisc=await createDiscourse({title,raw_text,folder_id:folderId});
-if(_watcherReady&&engramDisc){watcherPost('EMBED',{id:engramDisc.id,title,body:raw_text,itemType:'discourse',lastSeenActive:Date.now()}).catch(()=>{});}
+  const engramDisc = await createDiscourse({title,raw_text,folder_id:folderId});
+if (isWatcherReady && engramDisc) queueWatcherEmbed(engramDisc.id, title, raw_text, 'discourse');
   
   // 2. Update the burn marker
   localStorage.setItem('lastBurn_'+charId,Date.now().toString());
@@ -2657,11 +2580,9 @@ async function saveCurrentDiscourse(silent=false){
   await updateDiscourse(currentDiscourseId,{title,raw_text});
   if(!silent)showToast("Saved ◆");
   setTimeout(()=>backupToAkashic(),0);
-  if (_watcherReady && currentDiscourseId) {
+  if (isWatcherReady && currentDiscourseId) {
     const disc = await getDiscourse(currentDiscourseId);
-    if (disc && disc.item_type) {
-      watcherPost('EMBED', { id: currentDiscourseId, title, body: raw_text, itemType: disc.item_type, lastSeenActive: Date.now() }).catch(() => {});
-    }
+    if (disc && disc.item_type) queueWatcherEmbed(currentDiscourseId, title, raw_text, disc.item_type);
   }
 }
 
@@ -3329,6 +3250,7 @@ async function openQuickCapture(){
 }
 
 function closeQuickCapture(){document.getElementById('capture-modal').classList.remove('visible');closeOverlay();}
+
 async function confirmQuickCapture(){
   if(_cs)return;_cs=true;
   try{
@@ -3343,7 +3265,7 @@ async function confirmQuickCapture(){
   fId=await createFolder(fn,currentFolderId||null);
   isNF=true;nfn=fn;}
     const now=Date.now();const sparkId='n_'+now;await dbPut('cosm_discourses',{id:sparkId,title,raw_text,folder_id:fId,source_link:null,item_type:'note',created_at:now,updated_at:now});
-if(_watcherReady){watcherPost('EMBED',{id:sparkId,title,body:raw_text,itemType:'note',lastSeenActive:now}).catch(()=>{});}
+if(isWatcherReady) queueWatcherEmbed(sparkId, title, raw_text, 'note');
     closeQuickCapture();if(navigator.vibrate)navigator.vibrate(50);
     if(isNF)enterFolder(fId,nfn);else await renderTableView();showToast('Sparked ◆');
   }catch(err){console.error(err);showToast('Spark failed ◆');}finally{_cs=false;}
@@ -3835,13 +3757,12 @@ if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 
 window.cosmOSPinDisc=async function({title,raw_text,source_link,backlink}){const disc=await createDiscourse({title,raw_text,source_link:JSON.stringify(source_link)});if(backlink){const blId="bl_"+Date.now();await dbPut("cosm_backlinks",{id:blId,discourse_id:disc.id,...backlink,created_at:Date.now()});}return disc.id;};
 </script>
-<div class="bottom-bar" id="bottom-bar">
-  <div class="bottom-bar-scroll" id="bottom-bar-scroll"></div>
-</div>
-<div class="bottom-bar" id="bottom-bar">
+
+<<div class="bottom-bar" id="bottom-bar">
   <div class="bottom-bar-scroll" id="bottom-bar-scroll"></div>
 </div>
 
 <div class="watcher-loading-dot" id="watcher-loading-dot"></div>
+
 </body>
 </html>
