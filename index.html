@@ -2096,11 +2096,17 @@ async function init(){
   
   document.getElementById('input-api-key').value=localStorage.getItem('nq_api_key')||'';
   document.getElementById('input-model').value=localStorage.getItem('nq_model')||'deepseek/deepseek-v4-flash';
-  initWatcher(); // Boot the worker
-   // After a short delay so UI loads first
-   setTimeout(async () => {
-  const stats = await watcherPost('GET_STATS', {});
-  showToast('Watcher: ' + JSON.stringify(stats));
+  // Defer Watcher until UI is painted, and never block boot
+setTimeout(() => {
+  try {
+    initWatcher();
+    // fire and forget, do not await
+    watcherPost('GET_STATS', {}).then(stats => {
+      if(stats) showToast('Watcher ready ◆');
+    }).catch(()=>{});
+  } catch(e) {
+    console.warn('Watcher disabled', e);
+  }
 }, 8000);
   setTimeout(async () => {
      if (_watcherReady) {
