@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.26</title>
+<title>NakedQuantum v0.25.3</title>
 <style>
 :root {
   --bg: #000000;
@@ -186,6 +186,31 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
   50%  { opacity: 0.12; transform: translate(var(--mx), var(--my)); }
   85%  { opacity: 0.18; }
   100% { opacity: 0; transform: translate(0px, 0px); }
+}
+
+/* WATCHER LOADING DOT */
+.watcher-loading-dot {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(200,160,80,0.5);
+  z-index: 1010;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.watcher-loading-dot.visible {
+  opacity: 0.5;
+  animation: watcherLoadPulse 2s ease-in-out infinite;
+}
+@keyframes watcherLoadPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.8; }
 }
 
 /* DEEP SOUP VIEW */
@@ -489,113 +514,6 @@ select.cosm-input {
 .bar-pill.gold { border-color: var(--accent-dim); }
 .bar-pill.danger .bar-pill-label { color: #ff6060; }
 .bar-pill.danger { border-color: var(--danger); }
-
-/* Watcher CSS */
-.watcher-dot {
-  position: fixed;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 12px rgba(200,160,80,0.6), 0 0 4px rgba(200,160,80,0.9);
-  z-index: 600;
-  pointer-events: auto;
-  cursor: pointer;
-  opacity: 0;
-  transform: scale(0.4);
-  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-  will-change: opacity, transform;
-}
-
-.watcher-dot.visible {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.watcher-dot.pulsing {
-  animation: watcherPulse 2.4s ease-in-out infinite;
-}
-
-@keyframes watcherPulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(200,160,80,0.6), 0 0 4px rgba(200,160,80,0.9); }
-  50% { box-shadow: 0 0 24px rgba(200,160,80,0.9), 0 0 8px rgba(200,160,80,1), 0 0 40px rgba(200,160,80,0.3); }
-}
-
-.watcher-panel {
-  position: fixed;
-  background: rgba(10,10,10,0.96);
-  border: 1px solid var(--accent-dim);
-  border-radius: 14px;
-  padding: 16px;
-  z-index: 700;
-  max-width: 280px;
-  min-width: 220px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  opacity: 0;
-  transform: scale(0.92) translateY(6px);
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34,1.2,0.64,1);
-}
-
-.watcher-panel.visible {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-  pointer-events: auto;
-}
-
-.watcher-panel-title {
-  font-size: 9px;
-  letter-spacing: 3px;
-  color: var(--accent);
-  font-weight: 900;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-  opacity: 0.7;
-}
-
-.watcher-link-item {
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 6px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.watcher-link-item:active {
-  background: var(--surface2);
-  border-color: var(--accent-dim);
-}
-
-.watcher-link-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.watcher-link-score {
-  font-size: 9px;
-  color: var(--accent-dim);
-  letter-spacing: 1px;
-  margin-top: 2px;
-}
-
-.watcher-panel-close {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 11px;
-  padding: 4px;
-  margin-top: 8px;
-  width: 100%;
-  text-align: center;
-  letter-spacing: 1px;
-  font-weight: 700;
-}
 
 </style>
 </head>
@@ -1041,6 +959,22 @@ let selectMode=false, selectedItems=new Set();
 let deepSoupFolderId = null;
 let deepSoupPath = [{id: null, name: '꩜ Deep Soup'}];
 
+/* ── WATCHER CONFIG ─────────────────────────────────────────── */
+const WATCHER_CONFIG = {
+  MODEL: 'Xenova/bge-base-en-v1.5',
+  SIMILARITY_THRESHOLD: 0.82,
+  DECAY_ACTIVE_DAYS: 25,
+  LINK_EXPIRY_DAYS: 60,
+  MIN_DISCOURSES: 5,
+  MIN_WORDS: 80,
+  SILENT_PERIOD_HOURS: 48,
+  TITLE_WEIGHT: 0.3,
+  BODY_WEIGHT: 0.7,
+  SPARK_BOOST: 1.1,
+  TEMPORAL_BOOST_MAX: 0.15,
+  PASS_COOLDOWN_HOURS: 20,
+  RECENT_DAYS: 7,
+};
 
 /* PERSONA */
 function getGlobalPersona(){
@@ -1255,43 +1189,25 @@ self.onmessage = async (e) => {
 };
 `;
 
-let _id = 0;
-const _pending = {};
-let _worker = null;
-let _workerReady = null;
 
-function initWorker(){
-  const workerBlob = new Blob([WORKER_CODE], { type: 'application/javascript' });
-  const workerUrl = URL.createObjectURL(workerBlob);
-  _worker = new Worker(workerUrl);
-
-  _worker.onmessage = e => {
-    const { id, result, error } = e.data;
-    if (_pending[id]) {
-      if (error) _pending[id].reject(new Error(error));
-      else _pending[id].resolve(result);
-      delete _pending[id];
-    }
-  };
-
-  _workerReady = new Promise((res, rej) => {
-    const msgId = ++_id;
-    _pending[msgId] = { resolve: res, reject: rej };
-    _worker.postMessage({ id: msgId, action: 'INIT' });
-  });
-}
-
+/* ── WATCHER WORKER CODE ────────────────────────────────────── */
 const WATCHER_CODE = `
-/* WATCHER v1.0 — NakedQuantum
-BGE-Small-en-v1.5 via importScripts (classic worker, blob-safe)
-Separate IndexedDB nq_watcher — never touches encrypted SQLite
-Vanilla JS cosine on Float32Array — zero external dependencies
+/* WATCHER v2.0 -- NakedQuantum
+   BGE-base-en-v1.5 via Transformers.js
+   Separate IndexedDB nq_watcher
+   Vanilla JS cosine on Float32Array
 */
 
-const MODEL_ID = 'Xenova/bge-small-en-v1.5';
+const MODEL_ID = 'Xenova/bge-base-en-v1.5';
 const SIMILARITY_THRESHOLD = 0.82;
 const DECAY_ACTIVE_DAYS = 25;
-const LINK_EXPIRY_DAYS = 14;
+const LINK_EXPIRY_DAYS = 60;
+const SILENT_PERIOD_HOURS = 48;
+const TITLE_WEIGHT = 0.3;
+const BODY_WEIGHT = 0.7;
+const SPARK_BOOST = 1.1;
+const TEMPORAL_BOOST_MAX = 0.15;
+const RECENT_DAYS = 7;
 const DAY_MS = 86400000;
 
 let embedder = null;
@@ -1354,7 +1270,7 @@ const idb = {
   })
 };
 
-/* ── SHA256 HASH ────────────────────────────────────────────── */
+/* ── SHA256 ────────────────────────────────────────────────── */
 
 async function sha256(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -1379,16 +1295,11 @@ function cosine(a, b) {
 async function loadModel() {
   try {
     importScripts('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
-
     self.postMessage({ type: 'WATCHER_STATUS', status: 'loading' });
-
     self.Transformers.env.useBrowserCache = true;
     self.Transformers.env.backends.onnx.wasm.proxy = false;
-
     embedder = await self.Transformers.pipeline(
-      'feature-extraction',
-      MODEL_ID,
-      {
+      'feature-extraction', MODEL_ID, {
         quantized: true,
         progress_callback: (progress) => {
           if (progress.status === 'downloading') {
@@ -1401,7 +1312,6 @@ async function loadModel() {
         }
       }
     );
-
     return true;
   } catch (err) {
     console.error('[Watcher] Model load failed:', err.message);
@@ -1410,118 +1320,102 @@ async function loadModel() {
   }
 }
 
-/* ── EMBED ───────────────────────────────────────────────────── */
+/* ── EMBED ──────────────────────────────────────────────────── */
 
-async function embedDiscourse(id, text, lastSeenActive) {
+async function embedDiscourse(id, title, body, itemType, lastSeenActive) {
   if (!embedder) throw new Error('Model not loaded');
-
-  const normalized = 'Represent this sentence: ' + text.trim().toLowerCase().slice(0, 2000);
-  const hash = await sha256(normalized);
-
+  const titleText = 'Represent this sentence: ' + title.trim().toLowerCase();
+  const bodyText = 'Represent this sentence: ' + body.trim().toLowerCase().slice(0, 2000);
+  const hash = await sha256(titleText + '|||' + bodyText);
   const existing = await idb.get('embeddings', id);
   if (existing && existing.hash === hash) {
     await idb.put('embeddings', { ...existing, last_seen_active: lastSeenActive || Date.now() });
     return { status: 'skipped', id };
   }
-
-  const output = await embedder(normalized, { pooling: 'mean', normalize: true });
-  const vector = Array.from(output.data);
-
+  const titleEmb = await embedder(titleText, { pooling: 'mean', normalize: true });
+  const bodyEmb = await embedder(bodyText, { pooling: 'mean', normalize: true });
+  const tv = titleEmb.data, bv = bodyEmb.data;
+  const combined = new Float32Array(tv.length);
+  for (let i = 0; i < tv.length; i++) {
+    combined[i] = TITLE_WEIGHT * tv[i] + BODY_WEIGHT * bv[i];
+  }
+  let norm = 0;
+  for (let i = 0; i < combined.length; i++) norm += combined[i] * combined[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) for (let i = 0; i < combined.length; i++) combined[i] /= norm;
   await idb.put('embeddings', {
-    id,
-    vector,
-    hash,
+    id, vector: Array.from(combined), hash,
     created_at: existing ? existing.created_at : Date.now(),
-    last_seen_active: lastSeenActive || Date.now()
+    last_seen_active: lastSeenActive || Date.now(),
+    item_type: itemType
   });
-
   return { status: 'embedded', id };
 }
 
-/* ── NIGHTLY PASS ────────────────────────────────────────────── */
+/* ── NIGHTLY PASS ───────────────────────────────────────────── */
 
 async function runSimilarityPass() {
   const now = Date.now();
   const activeCutoff = now - (DECAY_ACTIVE_DAYS * DAY_MS);
   const linkExpiryCutoff = now - (LINK_EXPIRY_DAYS * DAY_MS);
-
+  const silentCutoff = now - (SILENT_PERIOD_HOURS * 3600000);
   const allEmbeddings = await idb.getAll('embeddings');
   const active = allEmbeddings.filter(e => e.last_seen_active > activeCutoff);
-
   if (active.length < 2) return { linksFound: 0, compared: 0 };
-
-  const recentCutoff = now - (7 * DAY_MS);
-  const setA = active.filter(e => e.last_seen_active > recentCutoff);
+  const recentCutoff = now - (RECENT_DAYS * DAY_MS);
+  const setA = active.filter(e => e.last_seen_active > recentCutoff && e.created_at < silentCutoff);
   const setB = active;
-
   let linksFound = 0, compared = 0;
-
   for (const a of setA) {
     const vecA = new Float32Array(a.vector);
     for (const b of setB) {
       if (a.id === b.id) continue;
       const score = cosine(vecA, new Float32Array(b.vector));
+      const finalScore = score * (a.item_type === 'note' || b.item_type === 'note' ? SPARK_BOOST : 1.0);
       compared++;
-      if (score >= SIMILARITY_THRESHOLD) {
+      if (finalScore >= SIMILARITY_THRESHOLD) {
         const linkId = [a.id, b.id].sort().join('_');
-        await idb.put('links', {
-          id: linkId,
-          a: a.id,
-          b: b.id,
-          score: Math.round(score * 1000) / 1000,
-          created_at: now
-        });
+        await idb.put('links', { id: linkId, a: a.id, b: b.id, score: Math.round(finalScore * 1000) / 1000, created_at: now });
         linksFound++;
       }
     }
   }
-
   await idb.deleteOlderThan('links', 'created_at', linkExpiryCutoff);
-
   for (const e of active) {
     await idb.put('embeddings', { ...e, last_seen_active: now });
   }
-
   lastPassTime = now;
   return { linksFound, compared, activeCount: active.length };
 }
 
-/* ── GET LINKS ───────────────────────────────────────────────── */
+/* ── GET LINKS ──────────────────────────────────────────────── */
 
 async function getLinksForDiscourse(discourseId) {
   const all = await idb.getAll('links');
-  return all
-    .filter(l => l.a === discourseId || l.b === discourseId)
+  return all.filter(l => l.a === discourseId || l.b === discourseId)
     .map(l => ({ linkedId: l.a === discourseId ? l.b : l.a, score: l.score }));
 }
+async function getAllActiveLinks() { return await idb.getAll('links'); }
 
-async function getAllActiveLinks() {
-  return await idb.getAll('links');
-}
-
-/* ── PRUNE ───────────────────────────────────────────────────── */
+/* ── PRUNE ──────────────────────────────────────────────────── */
 
 async function pruneDiscourse(id) {
   await idb.delete('embeddings', id);
   const all = await idb.getAll('links');
-  for (const link of all) {
-    if (link.a === id || link.b === id) await idb.delete('links', link.id);
-  }
+  for (const link of all) { if (link.a === id || link.b === id) await idb.delete('links', link.id); }
   return { pruned: id };
 }
 
-/* ── MESSAGE HANDLER ─────────────────────────────────────────── */
+/* ── MESSAGE HANDLER ────────────────────────────────────────── */
 
 self.onmessage = async (e) => {
   const { id, type, data } = e.data;
-  const reply = (result, error) =>
-    self.postMessage({ id, type: type + '_REPLY', result, error: error?.message });
-
+  const reply = (result, error) => self.postMessage({ id, type: type + '_REPLY', result, error: error?.message });
   try {
     switch (type) {
       case 'EMBED': {
         if (!isReady) { reply(null, new Error('NOT_READY')); return; }
-        reply(await embedDiscourse(data.id, data.text, data.lastSeenActive));
+        reply(await embedDiscourse(data.id, data.title, data.body, data.itemType, data.lastSeenActive));
         break;
       }
       case 'RUN_PASS': {
@@ -1531,26 +1425,13 @@ self.onmessage = async (e) => {
       }
       case 'GET_LINKS': {
         if (!watcherDB) { reply([]); return; }
-        if (data && data.discourseId) {
-          reply(await getLinksForDiscourse(data.discourseId));
-        } else {
-          reply(await getAllActiveLinks());
-        }
+        if (data && data.discourseId) { reply(await getLinksForDiscourse(data.discourseId)); }
+        else { reply(await getAllActiveLinks()); }
         break;
       }
       case 'PRUNE': {
         if (!watcherDB) { reply(null); return; }
         reply(await pruneDiscourse(data.id));
-        break;
-      }
-      case 'UPDATE_ACTIVE': {
-        if (!watcherDB) { reply(null); return; }
-        const now = Date.now();
-        for (const discId of (data?.ids || [])) {
-          const existing = await idb.get('embeddings', discId);
-          if (existing) await idb.put('embeddings', { ...existing, last_seen_active: now });
-        }
-        reply({ updated: data?.ids?.length || 0 });
         break;
       }
       case 'GET_STATS': {
@@ -1560,66 +1441,86 @@ self.onmessage = async (e) => {
         reply({ embeddings: embs.length, links: lnks.length, lastPass: lastPassTime, ready: isReady });
         break;
       }
-      default:
-        reply(null, new Error('UNKNOWN: ' + type));
+      default: reply(null, new Error('UNKNOWN: ' + type));
     }
-  } catch (err) {
-    console.error('[Watcher] Handler error:', err);
-    reply(null, err);
-  }
+  } catch (err) { console.error('[Watcher] Handler error:', err); reply(null, err); }
 };
 
-/* ── BOOT ────────────────────────────────────────────────────── */
+/* ── BOOT ───────────────────────────────────────────────────── */
 
 async function init() {
   try {
     watcherDB = await openWatcherDB();
-
     let loaded = await loadModel();
-    if (!loaded) {
-      await new Promise(r => setTimeout(r, 5000));
-      loaded = await loadModel();
-    }
-
-    if (!loaded) {
-      self.postMessage({ type: 'ERROR', reason: 'MODEL_LOAD_FAIL' });
-      return;
-    }
-
+    if (!loaded) { await new Promise(r => setTimeout(r, 5000)); loaded = await loadModel(); }
+    if (!loaded) { self.postMessage({ type: 'ERROR', reason: 'MODEL_LOAD_FAIL' }); return; }
     isReady = true;
     self.postMessage({ type: 'READY' });
     self.postMessage({ type: 'WATCHER_STATUS', status: 'ready' });
-
-  } catch (err) {
-    console.error('[Watcher] Boot failed:', err);
-    self.postMessage({ type: 'ERROR', reason: err.message });
-  }
+  } catch (err) { console.error('[Watcher] Boot failed:', err); self.postMessage({ type: 'ERROR', reason: err.message }); }
 }
-
 init();
 `;
+
+let _id = 0;
+const _pending = {};
+let _worker = null;
+let _workerReady = null;
+
+function initWorker(){
+  const workerBlob = new Blob([WORKER_CODE], { type: 'application/javascript' });
+  const workerUrl = URL.createObjectURL(workerBlob);
+  _worker = new Worker(workerUrl);
+
+  _worker.onmessage = e => {
+    const { id, result, error } = e.data;
+    if (_pending[id]) {
+      if (error) _pending[id].reject(new Error(error));
+      else _pending[id].resolve(result);
+      delete _pending[id];
+    }
+  };
+
+  _workerReady = new Promise((res, rej) => {
+    const msgId = ++_id;
+    _pending[msgId] = { resolve: res, reject: rej };
+    _worker.postMessage({ id: msgId, action: 'INIT' });
+  });
+}
+
+/* DB HELPERS */
+const dbPut = (s, d) => _workerReady.then(() => new Promise((res, rej) => {
+  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
+  _worker.postMessage({ id: msgId, action: 'PUT', store: s, data: d });
+}));
+const dbGetAll = (s) => _workerReady.then(() => new Promise((res, rej) => {
+  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
+  _worker.postMessage({ id: msgId, action: 'GET_ALL', store: s });
+}));
+const dbGet = (s, id) => _workerReady.then(() => new Promise((res, rej) => {
+  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
+  _worker.postMessage({ id: msgId, action: 'GET', store: s, data: { id } });
+}));
+const dbGetByIndex = (s, f, v) => _workerReady.then(() => new Promise((res, rej) => {
+  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
+  _worker.postMessage({ id: msgId, action: 'GET_BY_INDEX', store: s, field: f, value: v });
+}));
+const dbDelete = (s, id) => _workerReady.then(() => new Promise((res, rej) => {
+  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
+  _worker.postMessage({ id: msgId, action: 'DELETE', store: s, data: { id } });
+}));
+const setEncryptionKey = (keyBytes) => _workerReady.then(() => new Promise((res, rej) => {
+  const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
+  _worker.postMessage({ id: msgId, action: 'SET_KEY', data: { keyBytes: Array.from(keyBytes) } });
+}));
+
+
+/* ── WATCHER INIT ───────────────────────────────────────────── */
 
 let _watcherWorker = null;
 let _watcherReady = false;
 let _watcherPending = {};
 let _watcherMsgId = 0;
-
-// 8 safe anchor positions -- avoid header (top 56px), bottom bar (bottom 80px)
-// avoid right edge (header buttons), avoid left edge (gold thread zone)
-const WATCHER_ANCHORS = [
-  { top: '72px',  left: '50%'  },   // below header, center
-  { top: '72px',  right: '52px' },  // below header, right safe zone
-  { top: '30%',   right: '16px' },  // mid-right
-  { top: '50%',   right: '16px' },  // center-right
-  { top: '70%',   right: '16px' },  // lower-right
-  { top: '30%',   left: '40px' },   // mid-left (clear of gold thread)
-  { top: '50%',   left: '40px' },   // center-left
-  { bottom: '90px', left: '50%' },  // above bottom bar, center
-];
-
-let _watcherCurrentAnchor = -1;
-let _watcherHasLinks = false;
-let _watcherCurrentLinks = [];
 
 function initWatcher() {
   try {
@@ -1629,255 +1530,73 @@ function initWatcher() {
 
     _watcherWorker.onmessage = (e) => {
       const { id, type, result, error } = e.data;
-
       if (id && _watcherPending[id]) {
         if (error) _watcherPending[id].reject(new Error(error));
         else _watcherPending[id].resolve(result);
         delete _watcherPending[id];
         return;
       }
-
       if (type === 'READY') {
         _watcherReady = true;
         console.log('[Watcher] Ready');
-        scheduleWatcherPass();
-      }
-
-      if (type === 'WATCHER_STATUS') {
-        if (result?.status === 'loading' || e.data.status === 'loading') {
-          showToast('◈ Watcher awakening...');
-        } else if (result?.status === 'ready' || e.data.status === 'ready') {
-          showToast('◈ Watcher ready');
+        const firstAwakening = !localStorage.getItem('nq_watcher_awakened');
+        if (firstAwakening) {
+          localStorage.setItem('nq_watcher_awakened', '1');
+          showToast('◈ The Watcher has awakened');
         }
+        hideWatcherLoading();
       }
-
+      if (type === 'WATCHER_STATUS') {
+        const status = e.data.status || result?.status;
+        if (status === 'loading') showWatcherLoading();
+        if (status === 'ready') hideWatcherLoading();
+      }
       if (type === 'MODEL_PROGRESS') {
         const loaded = e.data.loaded || 0;
         const total = e.data.total || 136;
-        showToast('◈ Watcher ' + loaded + '/' + total + 'mb');
+        updateWatcherLoading(loaded, total);
       }
-
       if (type === 'ERROR') {
         console.warn('[Watcher] Error:', e.data.reason);
+        hideWatcherLoading();
       }
     };
 
     _watcherWorker.onerror = (err) => {
       console.warn('[Watcher] Crashed:', err.message);
-      setTimeout(() => initWatcher(), 3000);
+      hideWatcherLoading();
+      setTimeout(() => initWatcher(), 5000);
     };
-
   } catch (err) {
     console.warn('[Watcher] Could not start:', err);
   }
 }
 
 function watcherPost(type, data) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (!_watcherWorker) { resolve(null); return; }
     const msgId = ++_watcherMsgId;
-    _watcherPending[msgId] = { resolve, reject };
+    _watcherPending[msgId] = { resolve, reject: () => resolve(null) };
     _watcherWorker.postMessage({ id: msgId, type, data });
-    // Timeout safety -- don't hang forever
     setTimeout(() => {
-      if (_watcherPending[msgId]) {
-        delete _watcherPending[msgId];
-        resolve(null); // Soft fail
-      }
-    }, 10000);
+      if (_watcherPending[msgId]) { delete _watcherPending[msgId]; resolve(null); }
+    }, 15000);
   });
 }
 
-// ── NIGHTLY PASS SCHEDULER ───────────────────────────────────
+/* ── WATCHER LOADING INDICATOR ──────────────────────────────── */
 
-function scheduleWatcherPass() {
-  if (!_watcherReady) return;
-  const now = new Date();
-  const lastRun = parseInt(localStorage.getItem('nq_watcher_last_pass') || '0');
-  const hoursSinceLastRun = (Date.now() - lastRun) / 3600000;
-  const currentHour = now.getHours();
-
-  // Run if: after 3am AND more than 20 hours since last run
-  if (currentHour >= 3 && hoursSinceLastRun > 20) {
-    runWatcherPass();
-  } else if (hoursSinceLastRun > 20) {
-    // Not 3am yet -- schedule for next 3am check
-    const msUntil3am = ((3 - currentHour + 24) % 24) * 3600000;
-    setTimeout(() => scheduleWatcherPass(), msUntil3am + 60000);
-  }
+function showWatcherLoading() {
+  const dot = document.getElementById('watcher-loading-dot');
+  if (dot) { dot.style.display = 'block'; dot.classList.add('visible'); }
 }
-
-async function runWatcherPass() {
-  if (!_watcherReady) return;
-  try {
-    const result = await watcherPost('RUN_PASS', {});
-    if (result) {
-      localStorage.setItem('nq_watcher_last_pass', Date.now().toString());
-      console.log(`[Watcher] Pass complete -- ${result.linksFound} links found from ${result.compared} comparisons`);
-      if (result.linksFound > 0) {
-        // Check if current view has connections -- show dot
-        await refreshWatcherDot();
-      }
-    }
-  } catch (err) {
-    console.warn('[Watcher] Pass failed:', err);
-  }
+function hideWatcherLoading() {
+  const dot = document.getElementById('watcher-loading-dot');
+  if (dot) { dot.classList.remove('visible'); setTimeout(() => { dot.style.display = 'none'; }, 1000); }
 }
-
-// ── WATCHER DOT UI ───────────────────────────────────────────
-
-async function refreshWatcherDot() {
-  if (!_watcherReady) return;
-
-  let links = [];
-
-  // If we're in Lighthouse, check links for current discourse
-  if (currentView === 'lighthouse' && currentDiscourseId) {
-    links = await watcherPost('GET_LINKS', { discourseId: currentDiscourseId }) || [];
-  } else {
-    // In Soup or Sanctuary -- get all links, show dot if any exist
-    links = await watcherPost('GET_LINKS', {}) || [];
-  }
-
-  _watcherCurrentLinks = links;
-  _watcherHasLinks = links.length > 0;
-
-  if (_watcherHasLinks) {
-    showWatcherDot();
-  } else {
-    hideWatcherDot();
-  }
-}
-
-function showWatcherDot() {
-  const dot = document.getElementById('watcher-dot');
-  if (!dot) return;
-
-  // Pick a random anchor -- not the same as last time
-  let anchorIdx;
-  do {
-    anchorIdx = Math.floor(Math.random() * WATCHER_ANCHORS.length);
-  } while (anchorIdx === _watcherCurrentAnchor && WATCHER_ANCHORS.length > 1);
-  _watcherCurrentAnchor = anchorIdx;
-
-  const anchor = WATCHER_ANCHORS[anchorIdx];
-
-  // Reset position properties before applying new ones
-  dot.style.top = '';
-  dot.style.bottom = '';
-  dot.style.left = '';
-  dot.style.right = '';
-
-  Object.assign(dot.style, anchor);
-
-  // Transform adjustments for percentage-based centering
-  if (anchor.left === '50%') {
-    dot.style.transform = 'translateX(-50%)';
-  } else {
-    dot.style.transform = '';
-  }
-
-  dot.classList.remove('visible', 'pulsing');
-  // Force reflow for re-trigger animation
-  void dot.offsetWidth;
-  dot.classList.add('visible', 'pulsing');
-}
-
-function hideWatcherDot() {
-  const dot = document.getElementById('watcher-dot');
-  if (!dot) return;
-  dot.classList.remove('visible', 'pulsing');
-}
-
-function teleportWatcherDot() {
-  // Called when user navigates -- move dot to new anchor silently
-  if (!_watcherHasLinks) return;
-  const dot = document.getElementById('watcher-dot');
-  if (!dot || !dot.classList.contains('visible')) return;
-
-  // Brief fade out, reposition, fade back
-  dot.style.opacity = '0';
-  setTimeout(() => {
-    showWatcherDot();
-  }, 400);
-}
-
-// ── WATCHER PANEL (tap to reveal) ────────────────────────────
-
-async function openWatcherPanel() {
-  const panel = document.getElementById('watcher-panel');
-  const list = document.getElementById('watcher-links-list');
-  if (!panel || !list) return;
-
-  list.innerHTML = '';
-
-  if (!_watcherCurrentLinks.length) {
-    hideWatcherDot();
-    return;
-  }
-
-  // If we're in Lighthouse, links have { linkedId, score }
-  // If we're in Soup, links have { a, b, score } -- show all
-  const isInLighthouse = currentView === 'lighthouse' && currentDiscourseId;
-
-  if (isInLighthouse) {
-    for (const link of _watcherCurrentLinks) {
-      const disc = await getDiscourse(link.linkedId);
-      if (!disc) continue;
-      const item = document.createElement('div');
-      item.className = 'watcher-link-item';
-      item.innerHTML = `
-        <div class="watcher-link-title">${escHtml(disc.title || 'Untitled')}</div>
-        <div class="watcher-link-score">◈ ${Math.round(link.score * 100)}% resonance</div>
-      `;
-      item.addEventListener('click', () => {
-        closeWatcherPanel();
-        openDiscourse(link.linkedId);
-      });
-      list.appendChild(item);
-    }
-  } else {
-    // Show top 5 links by score
-    const top5 = [..._watcherCurrentLinks]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-
-    for (const link of top5) {
-      const discA = await getDiscourse(link.a);
-      const discB = await getDiscourse(link.b);
-      if (!discA || !discB) continue;
-      const item = document.createElement('div');
-      item.className = 'watcher-link-item';
-      item.innerHTML = `
-        <div class="watcher-link-title">${escHtml(discA.title || 'Untitled')}</div>
-        <div class="watcher-link-score">↔ ${escHtml(discB.title || 'Untitled')} · ${Math.round(link.score * 100)}%</div>
-      `;
-      item.addEventListener('click', () => {
-        closeWatcherPanel();
-        openDiscourse(link.a);
-      });
-      list.appendChild(item);
-    }
-  }
-
-  // Position panel near the dot
-  const dot = document.getElementById('watcher-dot');
-  const dotRect = dot?.getBoundingClientRect();
-  if (dotRect) {
-    const panelTop = Math.min(dotRect.top, window.innerHeight - 280);
-    const panelLeft = dotRect.left > window.innerWidth / 2
-      ? dotRect.left - 230
-      : dotRect.right + 10;
-    panel.style.top = panelTop + 'px';
-    panel.style.left = Math.max(8, panelLeft) + 'px';
-  }
-
-  panel.classList.add('visible');
-}
-
-function closeWatcherPanel() {
-  const panel = document.getElementById('watcher-panel');
-  if (panel) panel.classList.remove('visible');
+function updateWatcherLoading(loaded, total) {
+  const dot = document.getElementById('watcher-loading-dot');
+  if (dot) dot.style.opacity = 0.3 + (loaded / Math.max(total, 1)) * 0.7;
 }
 
 /* FOLDERS */
@@ -1945,11 +1664,7 @@ async function createDiscourse({title="Untitled Discourse", raw_text="", folder_
 
 async function updateDiscourse(id,updates){const disc=await getDiscourse(id);if(!disc)return;const u={...disc,...updates,updated_at:Date.now()};await dbPut("cosm_discourses",u);return u;}
 async function deleteDiscourse(id){const d=await getDiscourse(id);if(!d)return;await dbPut("cosm_discourses",{...d,isDeleted:true,deleted_at:Date.now()});}
-async function purgeDiscourse(id){await dbDelete("cosm_discourses",id);
-if (_watcherReady) {
-     watcherPost('PRUNE', { id }).catch(() => {});
-   }
-const t=await dbGetByIndex("cosm_mosaic_tiles","discourse_id",id);for(const x of t)await dbDelete("cosm_mosaic_tiles",x.id);const b=await dbGetByIndex("cosm_backlinks","discourse_id",id);for(const x of b)await dbDelete("cosm_backlinks",x.id);}
+async function purgeDiscourse(id){await dbDelete("cosm_discourses",id);const t=await dbGetByIndex("cosm_mosaic_tiles","discourse_id",id);for(const x of t)await dbDelete("cosm_mosaic_tiles",x.id);const b=await dbGetByIndex("cosm_backlinks","discourse_id",id);for(const x of b)await dbDelete("cosm_backlinks",x.id);}
 async function restoreDiscourse(id){const d=await getDiscourse(id);if(!d)return;const{isDeleted,deleted_at,...rest}=d;await dbPut("cosm_discourses",{...rest,updated_at:Date.now()});}
 
 /* CHARACTERS */
@@ -2096,27 +1811,7 @@ async function init(){
   
   document.getElementById('input-api-key').value=localStorage.getItem('nq_api_key')||'';
   document.getElementById('input-model').value=localStorage.getItem('nq_model')||'deepseek/deepseek-v4-flash';
-  // Defer Watcher until UI is painted, and never block boot
-setTimeout(() => {
-  try {
-    initWatcher();
-    // fire and forget, do not await
-    watcherPost('GET_STATS', {}).then(stats => {
-      if(stats) showToast('Watcher ready ◆');
-    }).catch(()=>{});
-  } catch(e) {
-    console.warn('Watcher disabled', e);
-  }
-}, 8000);
-  setTimeout(async () => {
-     if (_watcherReady) {
-       const allDiscs = await getDiscourses();
-       const activeIds = allDiscs
-         .filter(d => !d.isDeleted)
-         .map(d => d.id);
-       watcherPost('UPDATE_ACTIVE', { ids: activeIds }).catch(() => {});
-     }
-   }, 3000);
+  initWatcher();
 }
 
 /*Naked Handle*/
@@ -2582,7 +2277,6 @@ function showPanel(id){
   else{hideBottomBar();}
   
   firefly.sd(id==='view-lighthouse'||id==='view-chat'?80:20);
-  teleportWatcherDot();
 }
 
 /* HEADER BUTTONS */
@@ -3039,16 +2733,6 @@ async function saveCurrentDiscourse(silent=false){
   await updateDiscourse(currentDiscourseId,{title,raw_text});
   if(!silent)showToast("Saved ◆");
   setTimeout(()=>backupToAkashic(),0);
-  if (_watcherReady && currentDiscourseId) {
-     const title = document.getElementById("discourse-title").value.trim();
-     const body = document.getElementById("content-textarea").value;
-     const embedText = title + '\n\n' + body;
-     watcherPost('EMBED', {
-       id: currentDiscourseId,
-      text: embedText,
-       lastSeenActive: Date.now()
-     }).catch(() => {}); // Fire and forget -- never block save
-   }
 }
 
 async function handleNewDiscourse(){
@@ -4177,18 +3861,6 @@ document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){
   // Initial draw
   renderGoldTicks();
   
-  document.getElementById('watcher-dot')?.addEventListener('click', openWatcherPanel);
-   document.getElementById('watcher-panel-close')?.addEventListener('click', closeWatcherPanel);
-   document.addEventListener('click', (e) => {
-     const panel = document.getElementById('watcher-panel');
-     const dot = document.getElementById('watcher-dot');
-     if (panel?.classList.contains('visible') &&
-         !panel.contains(e.target) &&
-         e.target !== dot) {
-       closeWatcherPanel();
-     }
-   });
-  
   // Final boot trigger with Gatekeeper
   async function bootApp() {
     const lockScreen = document.getElementById('lock-screen');
@@ -4235,11 +3907,8 @@ window.cosmOSPinDisc=async function({title,raw_text,source_link,backlink}){const
 <div class="bottom-bar" id="bottom-bar">
   <div class="bottom-bar-scroll" id="bottom-bar-scroll"></div>
 </div>
-<div class="watcher-dot" id="watcher-dot"></div>
-<div class="watcher-panel" id="watcher-panel">
-  <div class="watcher-panel-title">◈ Connections</div>
-  <div id="watcher-links-list"></div>
-  <button class="watcher-panel-close" id="watcher-panel-close">✕ close</button>
-</div>
+
+<div class="watcher-loading-dot" id="watcher-loading-dot"></div>
+
 </body>
 </html>
