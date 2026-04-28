@@ -5,7 +5,7 @@
 */
 
 importScripts('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/transformers.min.js');
-
+const T = self.transformers;
 const MODEL_ID = 'Xenova/bge-base-en-v1.5';
 const SIMILARITY_THRESHOLD = 0.82;
 const DECAY_ACTIVE_DAYS = 25;
@@ -105,8 +105,8 @@ async function loadModel() {
     const T = self.Transformers || self.transformers;
     self.postMessage({ type: 'WATCHER_STATUS', status: 'loading' });
     T.env.useBrowserCache = true;
-    T.env.backends.onnx.wasm.proxy = true;
-    T.env.backends.onnx.wasm.numThreads = 1;
+T.env.backends.onnx.wasm.wasmPaths = self.location.origin + '/';
+T.env.allowLocalModels = false;
     embedder = await T.pipeline(
       'feature-extraction', MODEL_ID, {
         quantized: true,
