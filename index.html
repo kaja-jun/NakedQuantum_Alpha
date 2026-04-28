@@ -1448,6 +1448,32 @@ const _pending = {};
 let _worker = null;
 let _workerReady = null;
 
+function watcherPost(type, data) {
+  return new Promise((resolve) => {
+    if (!_watcherWorker) { resolve(null); return; }
+    const msgId = ++_watcherMsgId;
+    _watcherPending[msgId] = { resolve, reject: () => resolve(null) };
+    _watcherWorker.postMessage({ id: msgId, type, data });
+    setTimeout(() => {
+      if (_watcherPending[msgId]) { delete _watcherPending[msgId]; resolve(null); }
+    }, 60000); // 60s timeout for heavy embedding tasks
+  });
+}
+
+function scheduleWatcherPass() {
+  if (!_watcherReady) return;
+  const lastRun = parseInt(localStorage.getItem('nq_watcher_last_pass') || '0');
+  const hoursSince = (Date.now() - lastRun) / 3600000;
+  if (hoursSince > 20) {
+    watcherPost('RUN_PASS', {}).then(result => {
+      if (result) {
+        localStorage.setItem('nq_watcher_last_pass', Date.now().toString());
+        console.log("Watcher Pass Complete:", result);
+      }
+    }).catch(() => {});
+  }
+}
+
 function initWorker(){
   const workerBlob = new Blob([WORKER_CODE], { type: 'application/javascript' });
   const workerUrl = URL.createObjectURL(workerBlob);
