@@ -1313,14 +1313,26 @@ async function initWatcher() {
       }
     });
     isWatcherReady = true;
-    const firstAwakening = !localStorage.getItem('nq_watcher_awakened');
-    if (firstAwakening) {
-      localStorage.setItem('nq_watcher_awakened', '1');
-      showToast('◈ The Watcher has awakened');
+const firstAwakening = !localStorage.getItem('nq_watcher_awakened');
+if (firstAwakening) {
+  localStorage.setItem('nq_watcher_awakened', '1');
+  showToast('◈ The Watcher has awakened');
+  // One-time reindex of all existing content
+  setTimeout(async () => {
+    const discs = await getDiscourses();
+    let count = 0;
+    for (const d of discs) {
+      if (d.raw_text && d.raw_text.trim().length > 0) {
+        queueWatcherEmbed(d.id, d.title || 'Untitled', d.raw_text, d.item_type || 'discourse');
+        count++;
+      }
     }
-    hideWatcherLoading();
-    updateWatcherStatusUI();
-    scheduleWatcherPass();
+    if (count > 0) showToast('◈ Indexing ' + count + ' engrams...');
+  }, 5000);
+}
+hideWatcherLoading();
+updateWatcherStatusUI();
+scheduleWatcherPass();
   } catch (err) {
     console.warn('[Watcher] Init Failed:', err);
     hideWatcherLoading();
