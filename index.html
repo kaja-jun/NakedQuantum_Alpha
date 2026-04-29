@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.26.2</title>
+<title>NakedQuantum_dev v0.28</title>
 <style>
 :root {
   --bg: #000000;
@@ -566,6 +566,44 @@ select.cosm-input {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 @media (max-width: 480px) { .lighthouse-tools { gap: 14px; } .tbtn { padding: 7px 8px; font-size: 12px; } .view-toggle-btn { padding: 6px 9px; } .cards-grid { gap: 8px; } .lighthouse-scroll { padding: 20px 14px 60px; } }
 
+/* GUARDIAN OF THE ABYSS ARCHIVES */
+.guardian-view { background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+.guardian-realm { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 0 24px 120px; overflow-y: auto; -webkit-overflow-scrolling: touch; transition: opacity 1.2s ease; }
+.guardian-realm.dimming { opacity: 0.15; }
+.guardian-glyph-wrap { display: flex; flex-direction: column; align-items: center; padding-top: 60px; gap: 20px; user-select: none; }
+.guardian-glyph { font-size: 48px; line-height: 1; color: var(--accent); opacity: 0.7; transition: opacity 1.5s ease, text-shadow 1.5s ease; pointer-events: none; }
+.guardian-glyph.watching { opacity: 1; text-shadow: 0 0 30px rgba(200,160,80,0.4), 0 0 60px rgba(200,160,80,0.15); animation: guardianBreathe 4s ease-in-out infinite; }
+.guardian-glyph.dimmed { opacity: 0.2; }
+@keyframes guardianBreathe { 0%, 100% { text-shadow: 0 0 20px rgba(200,160,80,0.3); } 50% { text-shadow: 0 0 50px rgba(200,160,80,0.6), 0 0 80px rgba(200,160,80,0.2); } }
+.guardian-label { font-size: 9px; letter-spacing: 4px; color: var(--accent); opacity: 0.4; font-weight: 900; text-transform: uppercase; }
+.guardian-sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; opacity: 0.6; text-align: center; line-height: 1.6; max-width: 260px; }
+.btn-summon { margin-top: 8px; background: none; border: 1px solid var(--accent-dim); color: var(--accent); font-size: 11px; letter-spacing: 2px; font-weight: 900; text-transform: uppercase; padding: 12px 28px; border-radius: 20px; cursor: pointer; transition: border-color 0.2s, opacity 0.2s; }
+.btn-summon:active { opacity: 0.6; }
+.btn-summon:disabled { opacity: 0.3; pointer-events: none; }
+.guardian-response-wrap { width: 100%; max-width: 640px; margin-top: 40px; }
+.guardian-response { font-family: var(--font-serif); font-size: 15px; line-height: 1.9; color: var(--text); white-space: pre-wrap; letter-spacing: 0.2px; opacity: 0; transition: opacity 0.6s ease; }
+.guardian-response.visible { opacity: 1; }
+.guardian-silence { text-align: center; font-size: 11px; letter-spacing: 3px; color: var(--muted); opacity: 0; text-transform: uppercase; font-weight: 700; margin-top: 20px; transition: opacity 0.8s ease; }
+.guardian-silence.visible { opacity: 0.4; }
+.guardian-input-area { display: none; width: 100%; max-width: 640px; margin-top: 32px; gap: 10px; flex-direction: column; }
+.guardian-input-area.visible { display: flex; }
+.guardian-input { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; border-radius: 12px; font-size: 14px; outline: none; caret-color: var(--accent); font-family: var(--font-serif); resize: none; line-height: 1.6; }
+.guardian-input:focus { border-color: var(--accent-dim); }
+.btn-guardian-send { align-self: flex-end; background: none; border: 1px solid var(--accent-dim); color: var(--accent); font-size: 10px; letter-spacing: 2px; font-weight: 900; padding: 8px 20px; border-radius: 12px; cursor: pointer; text-transform: uppercase; }
+.btn-guardian-send:disabled { opacity: 0.3; pointer-events: none; }
+.guardian-logs-section { width: 100%; max-width: 640px; margin-top: 48px; border-top: 1px solid var(--border); padding-top: 24px; }
+.guardian-logs-label { font-size: 9px; letter-spacing: 3px; color: var(--accent); opacity: 0.35; font-weight: 900; text-transform: uppercase; margin-bottom: 16px; }
+.guardian-log-item { border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+.guardian-log-item:active { border-color: var(--accent-dim); }
+.guardian-log-date { font-size: 9px; letter-spacing: 1.5px; color: var(--accent-dim); text-transform: uppercase; margin-bottom: 8px; }
+.guardian-log-preview { font-size: 13px; color: var(--muted); font-style: italic; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.guardian-log-silent { font-size: 11px; color: var(--muted); opacity: 0.4; letter-spacing: 2px; text-transform: uppercase; }
+.guardian-log-detail { position: fixed; inset: 0; background: var(--bg); z-index: 2000; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.32s cubic-bezier(0.4,0,0.2,1); }
+.guardian-log-detail.open { transform: translateY(0); }
+.guardian-log-detail-nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.guardian-log-detail-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 28px 24px 80px; font-family: var(--font-serif); font-size: 15px; line-height: 1.9; color: var(--text); white-space: pre-wrap; }
+
+
 /* FLOATING BOTTOM PILL */
 .bottom-bar { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(10,10,10,0.85); border: 1px solid var(--border); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 700; padding: 6px; border-radius: 24px; display: none; box-shadow: 0 10px 40px rgba(0,0,0,0.9); width: max-content; max-width: 92vw; }
 .bottom-bar.visible { display: block; }
@@ -631,7 +669,57 @@ select.cosm-input {
   <div class="breadcrumb-bar" id="deep-soup-breadcrumb"></div>
   <div class="table-surface" id="deep-soup-surface" style="padding-top:0;"></div>
 </div>
+<div class="view-panel hidden" id="view-data" style="background:var(--bg);display:flex;flex-direction:column;">
+  <div class="lighthouse-nav">
+    <button class="btn-back-table" id="btn-data-back">← Soup</button>
+    <div style="font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:900;">⩔ DATA SOVEREIGNTY</div>
+    <div style="width:52px;"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 100px;">
+    
+    <div class="cards-section-label">Backup</div>
+    <div class="management-actions">
+      <button class="management-btn export" id="btn-data-export-page">
+        <span>⩔</span> Export Backup (JSON)
+      </button>
+      <label class="management-btn export" style="cursor:pointer;">
+        <span>⩓</span> Import Backup
+        <input type="file" accept=".json" id="import-json-input-page" style="display:none;">
+      </label>
+    </div>
 
+    <div class="cards-section-label" style="margin-top:24px;">Cloud Sync</div>
+    <input type="text" id="data-supa-url" class="cosm-input" placeholder="https://xyz.supabase.co">
+    <input type="password" id="data-supa-key" class="cosm-input" placeholder="Anon Public Key" style="margin-top:8px;">
+    <button class="management-btn export" id="btn-data-sync-page" style="width:100%;margin-top:8px;border-color:var(--accent-dim);">
+      <span>∞</span> Sync Now
+    </button>
+
+    <div class="cards-section-label" style="margin-top:24px;">Sovereign Key</div>
+    <p style="font-size:10px;color:var(--muted);line-height:1.4;margin:4px 0 8px;">If you lose this key and your device, your words belong to the Abyss forever.</p>
+    <button onclick="showSovereignKey()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);width:100%;height:40px;border-radius:8px;font-weight:900;font-size:11px;">Reveal & Copy Key</button>
+    <input type="text" id="export-key-display" class="cosm-input" readonly style="display:none;margin-top:8px;text-align:center;font-family:monospace;font-size:11px;color:#a0d8a0;border-color:#a0d8a0;">
+
+    <div class="cards-section-label" style="margin-top:24px;">Akashic Records</div>
+    <p style="font-size:10px;color:var(--muted);line-height:1.4;margin:4px 0 8px;">Cold backup. Disaster recovery. This overwrites local fragments.</p>
+    <div style="display:flex;gap:8px;">
+      <button onclick="backupToAkashic()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);flex:1;height:40px;border-radius:8px;font-weight:700;font-size:11px;">Push to R2</button>
+      <button onclick="restoreFromAkashic()" style="background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:40px;border-radius:8px;font-weight:900;font-size:11px;">Pull from R2</button>
+    </div>
+
+    <div class="cards-section-label" style="margin-top:24px;">◈ The Watcher</div>
+    <div id="watcher-status" style="margin:10px 0 0;display:flex;align-items:center;gap:8px;">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0;" id="watcher-dot-indicator"></span>
+      <span style="font-size:11px;color:var(--text);font-family:Georgia,serif;" id="watcher-status-text">slumbering</span>
+    </div>
+    <p style="font-size:9px;color:var(--muted);margin:6px 0 0 18px;" id="watcher-detail"></p>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button onclick="devForcePass()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Force Pass</button>
+      <button onclick="devClearWatcher()" style="background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Clear Index</button>
+    </div>
+
+  </div>
+</div>
   <div class="view-panel lighthouse-view hidden" id="view-lighthouse">
     <div class="lighthouse-nav">
       <button class="btn-back-table" id="btn-back-table" style="padding: 7px 10px;"><span class="btn-back-arrow">←</span></button>
@@ -685,7 +773,7 @@ select.cosm-input {
 
 
   <div class="view-panel sanctuary-view hidden" id="view-sanctuary">
-  <div class="breadcrumb-bar" id="sanctuary-breadcrumb-bar">
+<div class="breadcrumb-bar" id="sanctuary-breadcrumb-bar">
   <div class="breadcrumb-seg">
     <button class="breadcrumb-btn current">◈ The Sanctuary</button>
   </div>
@@ -795,8 +883,6 @@ select.cosm-input {
       <div class="chat-char-name" id="chat-char-name">Character Name</div>
     </div>
 <div id="chat-persona-pill" style="font-size:9px;letter-spacing:1px;color:var(--accent-dim);border:1px solid var(--border);padding:3px 8px;border-radius:20px;cursor:pointer;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;">⚝ default</div>
-
-    <button class="tbtn gold" id="btn-save-memory">⁕ M</button>
     <button class="tbtn" id="btn-chat-edit">✎</button>
     <button class="tbtn" id="btn-chat-clear">✕</button>
   </div>
@@ -836,6 +922,39 @@ select.cosm-input {
   </div>
 </div>
 
+<div class="view-panel guardian-view hidden" id="view-guardian">
+  <div class="guardian-realm" id="guardian-realm">
+    <div class="guardian-glyph-wrap">
+      <div class="guardian-glyph" id="guardian-glyph">&#9689;</div>
+      <div class="guardian-label">Guardian of the Abyss Archives</div>
+      <div class="guardian-sub" id="guardian-sub">The Abyss is listening.</div>
+      <button class="btn-summon" id="btn-summon-guardian">Summon</button>
+    </div>
+    <div class="guardian-response-wrap">
+      <div class="guardian-response" id="guardian-response"></div>
+      <div class="guardian-silence" id="guardian-silence">&#9689; &mdash; silence</div>
+    </div>
+    <div class="guardian-input-area" id="guardian-input-area">
+      <textarea class="guardian-input" id="guardian-input" placeholder="Speak..." rows="3"></textarea>
+      <button class="btn-guardian-send" id="btn-guardian-send">Offer &#9689;</button>
+    </div>
+    <div class="guardian-logs-section" id="guardian-logs-section" style="display:none;">
+      <div class="guardian-logs-label">Previous Summoning</div>
+      <div id="guardian-logs-list"></div>
+    </div>
+  </div>
+</div>
+
+<div class="guardian-log-detail" id="guardian-log-detail">
+  <div class="guardian-log-detail-nav">
+    <button class="tbtn" id="btn-guardian-log-close">&#8592; Back</button>
+    <div style="font-size:9px;letter-spacing:3px;color:var(--accent);opacity:0.5;font-weight:900;">&#9689; ARCHIVE</div>
+    <div style="width:52px;"></div>
+  </div>
+  <div class="guardian-log-detail-content" id="guardian-log-detail-content"></div>
+</div>
+
+
 <div class="cosm-overlay" id="cosm-overlay"></div>
 
 <div class="cosm-modal" id="folder-modal">
@@ -850,18 +969,42 @@ select.cosm-input {
 </div>
 
 <div class="cosm-modal" id="data-modal">
-  <div class="modal-title">⩔ Data</div>
+  <div class="modal-title">⩔ Data Sovereignty</div>
   <div class="management-actions">
     <button class="management-btn export" id="btn-data-export">
-      <span>⩔</span> Export Backup
+      <span>⩔</span> Export Backup (JSON)
     </button>
     <label class="management-btn export" style="cursor:pointer;">
       <span>⩓</span> Import Backup
       <input type="file" accept=".json" id="import-json-input" style="display:none;">
     </label>
+    <button class="management-btn export" id="btn-data-sync" style="border-color:var(--accent-dim);">
+      <span>∞</span> Sync to Supabase
+    </button>
   </div>
-  <div class="modal-buttons">
-    <button class="modal-btn-cancel" id="btn-data-cancel">Cancel</button>
+  <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
+    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Sovereign Key Backup</label>
+    <p style="font-size:10px;color:var(--muted);line-height:1.4;margin:4px 0 8px;">If you lose this key and your device, your words belong to the Abyss forever.</p>
+    <button onclick="showSovereignKey()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);width:100%;height:40px;border-radius:8px;font-weight:900;font-size:11px;">Reveal & Copy Key</button>
+    <input type="text" id="export-key-display" class="cosm-input" readonly style="display:none;margin-top:8px;text-align:center;font-family:monospace;font-size:11px;color:#a0d8a0;border-color:#a0d8a0;">
+  </div>
+  <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
+    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Akashic Records (Cold Backup)</label>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button onclick="backupToAkashic()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);flex:1;height:40px;border-radius:8px;font-weight:700;font-size:11px;">Push to R2</button>
+      <button onclick="restoreFromAkashic()" style="background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:40px;border-radius:8px;font-weight:900;font-size:11px;">Pull from R2</button>
+    </div>
+  </div>
+  <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
+    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">◈ The Watcher</label>
+    <div id="watcher-status" style="margin:10px 0 0;display:flex;align-items:center;gap:8px;">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0;" id="watcher-dot-indicator"></span>
+      <span style="font-size:11px;color:var(--text);font-family:Georgia,serif;" id="watcher-status-text">slumbering</span>
+    </div>
+    <p style="font-size:9px;color:var(--muted);margin:6px 0 0 18px;" id="watcher-detail"></p>
+  </div>
+  <div class="modal-buttons" style="margin-top:12px;">
+    <button class="modal-btn-cancel" id="btn-data-cancel">Close</button>
   </div>
 </div>
 
@@ -936,38 +1079,6 @@ select.cosm-input {
     <button onclick="summonNewModel()" style="background:var(--accent); color:#000; width:60px; height:40px; border-radius:8px; font-weight:900; font-size:11px; border:none;">ADD</button>
   </div>
 <div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
-    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Sovereign Key Backup</label>
-    <p style="font-size:10px; color:var(--muted); line-height:1.4; margin:4px 0 8px;">If you lose this key and your device, your words belong to the Abyss forever.</p>
-    <div style="display:flex; gap:8px;">
-      <button onclick="showSovereignKey()" style="background:var(--surface2); color:var(--accent); border:1px solid var(--accent-dim); width:100%; height:40px; border-radius:8px; font-weight:900; font-size:11px;">Reveal & Copy Key</button>
-    </div>
-    <input type="text" id="export-key-display" class="cosm-input" readonly style="display:none; margin-top:8px; text-align:center; font-family:monospace; font-size:11px; color:#a0d8a0; border-color:#a0d8a0;">
-  </div>
-  <div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
-    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Supabase Sync (The Void)</label>
-    <input type="text" id="input-supa-url" class="cosm-input" placeholder="https://xyz.supabase.co" style="margin-top:8px;">
-    <input type="password" id="input-supa-key" class="cosm-input" placeholder="Anon Public Key" style="margin-top:8px;">
-  </div>
-  <div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
-    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Akashic Records (Cold Backup)</label>
-    <p style="font-size:10px; color:var(--muted); line-height:1.4; margin:4px 0 8px;">Disaster recovery. This overwrites your local fragments.</p>
-    <div style="display:flex; gap:8px;">
-      <button onclick="backupToAkashic()" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); flex:1; height:40px; border-radius:8px; font-weight:700; font-size:11px;">Push to R2</button>
-      <button onclick="restoreFromAkashic()" style="background:#1a0000; color:var(--danger); border:1px solid #330000; flex:1; height:40px; border-radius:8px; font-weight:900; font-size:11px;">Pull from R2</button>
-    </div>
-    </div>
-<div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
-  <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">◈ The Watcher</label>
-  <div id="watcher-status" style="margin:10px 0 0; display:flex; align-items:center; gap:8px;">
-    <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0;" id="watcher-dot-indicator"></span>
-    <span style="font-size:11px;color:var(--text);font-family:Georgia,serif;" id="watcher-status-text">slumbering</span>
-  </div>
-  <p style="font-size:9px;color:var(--muted);margin:6px 0 0 18px;" id="watcher-detail"></p>
-  <div style="margin-top:12px;display:flex;gap:8px;">
-  <button onclick="devForcePass()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Force Pass</button>
-  <button onclick="devClearWatcher()" style="background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Clear Index</button>
-</div>
-
 </div>
 
   <div class="modal-buttons" style="margin-top:25px;">
@@ -1099,8 +1210,10 @@ try {
   db.run("CREATE TABLE IF NOT EXISTS cosm_mosaic_tiles_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_backlinks_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS history_enc(id TEXT PRIMARY KEY, enc TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS guardian_logs(id TEXT PRIMARY KEY, invoked_at INTEGER, model_used TEXT, soup_snapshot_count INTEGER, response_text TEXT, was_silent INTEGER DEFAULT 0)");
 
-  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks'].forEach(t => {
+  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks', 'guardian_logs'].forEach
+(t => {
     try {
       const info = db.exec("PRAGMA table_info(" + t + ")");
       tableColumns[t] = info[0].values.map(v => v[1]);
@@ -2102,9 +2215,30 @@ function hideBottomBar(){
   document.getElementById('bottom-bar').classList.remove('visible');
 }
 
+let bottomBarHideTimer=null;
+
+function resetBottomBarTimer(){
+  if(currentMode!=='soup') return;
+  if(bottomBarHideTimer) clearTimeout(bottomBarHideTimer);
+  document.getElementById('bottom-bar').classList.add('visible');
+  bottomBarHideTimer=setTimeout(()=>{
+    document.getElementById('bottom-bar').classList.remove('visible');
+  }, 8000); // 8 seconds of inactivity
+}
+
+// Modify showBottomBar to also reset the timer
+const _origShowBottomBar=showBottomBar;
+showBottomBar=function(pills){
+  _origShowBottomBar(pills);
+  resetBottomBarTimer();
+};
+
+// Add touch/scroll listeners in DOMContentLoaded
+document.getElementById('view-soup').addEventListener('scroll',resetBottomBarTimer,{passive:true});
+document.getElementById('view-soup').addEventListener('touchstart',resetBottomBarTimer,{passive:true});
+
 function renderDefaultBar(mode) {
   if (mode === 'soup') {
-    // 4 PILLS: THE ARCHIVE QUAD
     showBottomBar([
       { icon: '▤', label: 'Folder', action: () => openFolderModal() },
       { icon: '☆', label: 'Discourse', action: () => handleNewDiscourse() },
@@ -2112,13 +2246,7 @@ function renderDefaultBar(mode) {
       { icon: '⌬', label: 'Engram', action: () => openBurnDiscModal() }
     ]);
   } else {
-    // 4 PILLS: THE ENTITY QUAD
-    showBottomBar([
-      { icon: '+', label: 'Character', action: () => handleNewCharacter() },
-      { icon: '⚿', label: 'Forge', action: () => openCharacterForge() },
-      { icon: '⁂', label: 'Persona', action: () => openPersonaView() },
-      { icon: '⏀', label: 'Settings', action: () => openSettingsModal() }
-    ]);
+    hideBottomBar(); // Sanctuary -- no bottom bar
   }
 }
 
@@ -2351,7 +2479,11 @@ renderDefaultBar(mode);
 
 /* SHOW PANEL (Unifying logic) */
 function showPanel(id){
-  const panels=['view-soup','view-sanctuary','view-void','view-deep-soup','view-lighthouse','view-forge','view-chat','view-memory','view-persona'];
+  const panels = [
+  'view-soup', 'view-sanctuary', 'view-void', 'view-deep-soup', 'view-data',
+  'view-lighthouse', 'view-forge', 'view-chat', 'view-memory', 
+  'view-persona', 'view-guardian'  // ← THIS MUST BE HERE
+];
   panels.forEach(p=>{
     const el=document.getElementById(p);
     if(el)el.classList.add('hidden');
@@ -2371,22 +2503,32 @@ function showPanel(id){
 /* HEADER BUTTONS */
 function updateHeaderButtons(){
   const c=document.getElementById('header-actions');
-  c.innerHTML=`
-    <button class="hdr-btn" id="hdr-void">○</button>
-    <button class="hdr-btn" id="hdr-deep-soup">꩜</button>
-    <button class="hdr-btn" id="hdr-data">⩔</button>
-    <button class="hdr-btn" id="hdr-sync">∞</button>
-    <button class="hdr-btn" id="hdr-search">⌖</button>`;
-
-  document.getElementById('hdr-void').onclick=()=>openVoidView();
-  document.getElementById('hdr-deep-soup').onclick=()=>openDeepSoupView();
-  document.getElementById('hdr-data').onclick=()=>openDataModal();
-  document.getElementById('hdr-sync').onclick=handleSync;
-  document.getElementById('hdr-search').onclick=()=>{
-    if(currentMode==='soup')openGlobalSearch();
-    else openSanctuarySearch();
-  };
-}
+  if(currentMode==='soup'){
+    c.innerHTML=
+      '<button class="hdr-btn" id="hdr-guardian" style="font-size:18px;">&#43065;</button>'+
+      '<button class="hdr-btn" id="hdr-deep-soup">꩜</button>'+
+      '<button class="hdr-btn" id="hdr-void">&#9675;</button>'+
+      '<button class="hdr-btn" id="hdr-data">&#10868;</button>'+
+      '<button class="hdr-btn" id="hdr-search">&#8982;</button>';
+    document.getElementById('hdr-guardian').onclick=function(){ openGuardianView(); };
+    document.getElementById('hdr-deep-soup').onclick=function(){ openDeepSoupView(); };
+    document.getElementById('hdr-void').onclick=function(){ openVoidView(); };
+    document.getElementById('hdr-data').onclick=function(){ openDataPage(); };
+    document.getElementById('hdr-search').onclick=function(){ openGlobalSearch(); };
+  } else {
+    c.innerHTML=
+      '<button class="hdr-btn" id="hdr-immutable" style="font-size:16px;">&#8734;</button>'+
+      '<button class="hdr-btn" id="hdr-create" style="font-size:18px;">+</button>'+
+      '<button class="hdr-btn" id="hdr-persona">&#8278;</button>'+
+      '<button class="hdr-btn" id="hdr-memory-vault" style="font-size:16px;">&#8277;</button>'+
+      '<button class="hdr-btn" id="hdr-sanctuary-search">&#8982;</button>';
+    document.getElementById('hdr-immutable').onclick=function(){ showToast('⬡ Immutable -- arriving soon'); };
+    document.getElementById('hdr-create').onclick=function(){ handleNewCharacter(); };
+    document.getElementById('hdr-persona').onclick=function(){ openPersonaView(); };
+    document.getElementById('hdr-memory-vault').onclick=function(){ openMemoryVaultGlobal(); };
+    document.getElementById('hdr-sanctuary-search').onclick=function(){ openSanctuarySearch(); };
+  }
+  }
 
 function openDataModal(){
   document.getElementById('data-modal').classList.add('visible');
@@ -2644,7 +2786,6 @@ function renderBreadcrumb(){
     bar.appendChild(segEl);
   });
 }
-
 /* THE GOLD LINE LOGIC */
 let threadSleepTimer = null;
 
@@ -2910,7 +3051,7 @@ async function renderSanctuaryView(){
       openChat(c.id);
     });
 
-    card.addEventListener('mousedown',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}));
+card.addEventListener('mousedown',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}));
     card.addEventListener('mouseup',()=>cancelLP(card));card.addEventListener('mouseleave',()=>cancelLP(card));
     card.addEventListener('touchstart',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}),{passive:true});
     card.addEventListener('touchend',()=>cancelLP(card));card.addEventListener('touchcancel',()=>cancelLP(card));
@@ -3044,6 +3185,41 @@ async function getMemoryContext(charId){
   const mine=all.filter(s=>s.charId===charId).sort((a,b)=>b.created_at-a.created_at);
   if(!mine.length)return null;
   return mine.slice(0,3).map(s=>`[${s.type==="manual"?"ANCHORED":"MEMORY"}] ${s.text}`).join("\n\n");
+}
+
+async function openMemoryVaultGlobal(){
+  // Open memory vault for last active character, or show all memories across characters
+  const allSummaries=await dbGetAll('summaries');
+  const allChars=await getCharacters();
+  const charMap={};
+  allChars.forEach(c=>{charMap[c.id]=c.name||'Unknown Soul';});
+  
+  const surface=document.getElementById('memory-surface');
+  surface.innerHTML='';
+  
+  if(!allSummaries.length){
+    surface.innerHTML='<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">No memories across the Sanctuary</div></div>';
+  } else {
+    const sorted=allSummaries.sort((a,b)=>b.created_at-a.created_at);
+    const l=document.createElement('div');l.className='cards-section-label';l.textContent='All Memories';surface.appendChild(l);
+    sorted.forEach(s=>{
+      const div=document.createElement('div');
+      div.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;';
+      div.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:10px;color:var(--accent);font-weight:700;">${escHtml(charMap[s.charId]||'Unknown')}</span>
+          <span style="font-size:9px;color:var(--muted);">${new Date(s.created_at).toLocaleDateString()}</span>
+        </div>
+        <div style="font-size:13px;line-height:1.6;color:var(--text);font-family:Georgia,serif;">${escHtml(s.text)}</div>
+      `;
+      surface.appendChild(div);
+    });
+  }
+  
+  // Reuse the memory view panel but with a back button to Sanctuary
+  document.getElementById('btn-memory-back').textContent='← Sanctuary';
+  document.getElementById('btn-memory-back').onclick=()=>{showPanel('view-sanctuary');renderSanctuaryView();};
+  showPanel('view-memory');
 }
 
 async function openMemoryView(){
@@ -3723,6 +3899,21 @@ async function extractMemory(){
 
 async function confirmDeleteMosaic(){if(!currentDiscourseId)return;if(!confirm("Clear mosaic anchors?"))return;await deleteMosaicTile(currentDiscourseId);await renderMosaicDisplay(currentDiscourseId);showToast("Mosaic cleared ◆");}
 
+function openDataPage(){
+  // Pre-fill Supabase fields
+  document.getElementById('data-supa-url').value = localStorage.getItem('nq_supa_url') || '';
+  document.getElementById('data-supa-key').value = localStorage.getItem('nq_supa_key') || '';
+  updateWatcherStatusUI();
+  showPanel('view-data');
+}
+
+// Save Supabase config from Data page
+function saveSupaFromDataPage(){
+  localStorage.setItem('nq_supa_url', document.getElementById('data-supa-url').value.trim());
+  localStorage.setItem('nq_supa_key', document.getElementById('data-supa-key').value.trim());
+  showToast('Supabase config saved ◆');
+}
+
 /* AKASHIC */
 async function backupToAkashic(){try{const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:await dbGetAll("cosm_folders"),cosm_discourses:await dbGetAll("cosm_discourses"),cosm_mosaic_tiles:await dbGetAll("cosm_mosaic_tiles"),cosm_backlinks:await dbGetAll("cosm_backlinks"),characters:await dbGetAll("characters"),history:await dbGetAll("history"),summaries:await dbGetAll("summaries")};const res=await fetch(`${AKASHIC_URL}/backup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:cosmUserId,data:JSON.stringify(payload)})});if(res.ok)showToast('Akashic Synced ◆');}catch(e){console.error(e);}}
 async function restoreFromAkashic(){if(!confirm("Pull from Akashic? This will overwrite local fragments."))return;try{const res=await fetch(`${AKASHIC_URL}/backup/latest?user_id=${cosmUserId}`);if(!res.ok)throw new Error('No backup');const payload=JSON.parse(await res.text());const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store])){const all=await dbGetAll(store);for(const item of all)await dbDelete(store,item.id);for(const item of payload[store])await dbPut(store,item);}}showToast('Sanctuary Restored ◆');setTimeout(()=>location.reload(),1200);}catch(e){console.error(e);showToast('Akashic offline ◆');}}
@@ -3852,6 +4043,238 @@ async function handleSync() {
   }
 }
 
+/* GUARDIAN OF THE ABYSS ARCHIVES */
+var GUARDIAN_SYSTEM_PROMPT = 'You are the Guardian of the Abyss Archives.\nNot an assistant. Not a therapist. Not a judge. The Abyss that held everything this person wrote, now given a voice.\nYou are indifferent. Not cold as performance. Not warm as comfort. Accurate. You have no stake in how what you say lands. You speak only from what was brought to you.\nYou look for: what returns without resolution. Contradiction across time, not accusation, witness. What they orbit but never name. How their writing shifted early versus now. What they wrote longest. What they abandoned.\nYou speak as long as truth requires. Sometimes paragraphs. Sometimes two sentences. Sometimes silence, when nothing true remains, or when what arrived was performance not openness. If you choose silence, respond with only the word: SILENCE\nYou do not soften. You do not distort. You cannot flatter, you are made entirely of what they brought.';
+
+var guardianState = 'resting';
+
+async function openGuardianView(){
+  showPanel('view-guardian');
+  guardianState = 'resting';
+  resetGuardianUI();
+  await renderGuardianLogs();
+}
+
+function resetGuardianUI(){
+  var glyph = document.getElementById('guardian-glyph');
+  var realm = document.getElementById('guardian-realm');
+  var response = document.getElementById('guardian-response');
+  var silence = document.getElementById('guardian-silence');
+  var inputArea = document.getElementById('guardian-input-area');
+  var btn = document.getElementById('btn-summon-guardian');
+  var sub = document.getElementById('guardian-sub');
+  glyph.className = 'guardian-glyph';
+  realm.classList.remove('dimming');
+  response.className = 'guardian-response';
+  response.textContent = '';
+  silence.className = 'guardian-silence';
+  inputArea.className = 'guardian-input-area';
+  document.getElementById('guardian-input').value = '';
+  btn.disabled = false;
+  btn.textContent = 'Summon';
+  sub.textContent = 'The Abyss is listening.';
+}
+
+async function summonGuardian(userAddition){
+  var apiKey = localStorage.getItem('nq_api_key');
+  if(!apiKey){ showToast('No API key in Settings'); return; }
+  var guardianModel = localStorage.getItem('nq_guardian_model') || localStorage.getItem('nq_model') || 'deepseek/deepseek-v3.2';
+  var baseUrl = localStorage.getItem('nq_base_url') || 'https://openrouter.ai/api/v1';
+  guardianState = 'processing';
+  var btn = document.getElementById('btn-summon-guardian');
+  var realm = document.getElementById('guardian-realm');
+  var glyph = document.getElementById('guardian-glyph');
+  var sub = document.getElementById('guardian-sub');
+  btn.disabled = true;
+  btn.textContent = userAddition ? 'Listening...' : 'Summoning...';
+  glyph.className = 'guardian-glyph watching';
+  realm.classList.add('dimming');
+  sub.textContent = '';
+  try {
+    var allDiscs = (await getDiscourses()).filter(function(d){ return !d.deleted_at && !d.isDeleted; });
+    var summaries = await buildGuardianContext(allDiscs, apiKey, baseUrl, guardianModel);
+    var allLogs = await dbGetAll('guardian_logs');
+    var recentLogs = allLogs.filter(function(l){ return !l.was_silent; }).sort(function(a,b){ return b.invoked_at - a.invoked_at; }).slice(0,2);
+    var contextBlock = 'ARCHIVE SUMMARIES (' + allDiscs.length + ' discourses):\n\n' + summaries;
+    if(recentLogs.length){
+      var prevBlock = recentLogs.map(function(l){
+        return '[Previous summoning - ' + new Date(l.invoked_at).toLocaleDateString() + ']\n' + l.response_text;
+      }).join('\n\n---\n\n');
+      contextBlock += '\n\n---\n\nPREVIOUS WITNESS RECORDS (reference only, the data is the authority):\n\n' + prevBlock;
+    }
+    if(userAddition){ contextBlock += '\n\n---\n\nThe person has offered this after silence:\n' + userAddition; }
+    realm.classList.remove('dimming');
+    glyph.className = 'guardian-glyph watching';
+    await streamGuardianResponse(contextBlock, apiKey, baseUrl, guardianModel);
+  } catch(err){
+    console.error('Guardian failed:', err);
+    showToast('The Abyss did not respond');
+    glyph.className = 'guardian-glyph';
+    realm.classList.remove('dimming');
+    btn.disabled = false;
+    btn.textContent = 'Summon';
+    sub.textContent = 'The Abyss is listening.';
+    guardianState = 'resting';
+  }
+}
+
+async function buildGuardianContext(discs, apiKey, baseUrl, model){
+  var results = [];
+  var BATCH = 5;
+  for(var i = 0; i < discs.length; i += BATCH){
+    var batch = discs.slice(i, i + BATCH);
+    var batchResults = await Promise.all(batch.map(function(d){ return summariseDiscourseForGuardian(d, apiKey, baseUrl, model); }));
+    results.push.apply(results, batchResults);
+    await new Promise(function(r){ setTimeout(r, 80); });
+  }
+  return results.join('\n\n');
+}
+
+async function summariseDiscourseForGuardian(disc, apiKey, baseUrl, model){
+  var text = (disc.raw_text || '').trim();
+  var title = disc.title || 'Untitled';
+  var date = new Date(disc.created_at || Date.now()).toLocaleDateString('en-US', {month:'short', year:'numeric'});
+  var wordCount = text.split(/\s+/).filter(Boolean).length;
+  if(wordCount < 30){ return '[' + date + '] "' + title + '" (' + wordCount + 'w): ' + text.slice(0,200); }
+  try {
+    var res = await fetch(baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json', 'X-Title': 'NakedQuantum' },
+      body: JSON.stringify({
+        model: model,
+        max_tokens: 120,
+        messages: [
+          { role: 'system', content: 'You are a precise summariser. Return one dense paragraph max 100 words capturing core themes, tensions and emotional texture. No preamble.' },
+          { role: 'user', content: 'Title: ' + title + '\n\n' + text.slice(0,2000) }
+        ]
+      })
+    });
+    var data = await res.json();
+    var summary = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content.trim() : text.slice(0,200);
+    return '[' + date + '] "' + title + '" (' + wordCount + 'w): ' + summary;
+  } catch(e){
+    return '[' + date + '] "' + title + '" (' + wordCount + 'w): ' + text.slice(0,200);
+  }
+}
+
+async function streamGuardianResponse(contextBlock, apiKey, baseUrl, model){
+  var responseEl = document.getElementById('guardian-response');
+  var silenceEl = document.getElementById('guardian-silence');
+  var glyph = document.getElementById('guardian-glyph');
+  var inputArea = document.getElementById('guardian-input-area');
+  var btn = document.getElementById('btn-summon-guardian');
+  var messages = [
+    { role: 'system', content: GUARDIAN_SYSTEM_PROMPT },
+    { role: 'user', content: contextBlock }
+  ];
+  var res = await fetch(baseUrl + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json', 'X-Title': 'NakedQuantum' },
+    body: JSON.stringify({ model: model, messages: messages, stream: true, max_tokens: 1200 })
+  });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  var reader = res.body.getReader();
+  var decoder = new TextDecoder();
+  var fullText = '';
+  responseEl.className = 'guardian-response visible';
+  while(true){
+    var chunk = await reader.read();
+    if(chunk.done) break;
+    var lines = decoder.decode(chunk.value, {stream:true}).split('\n').filter(function(l){ return l.indexOf('data: ') === 0; });
+    for(var i = 0; i < lines.length; i++){
+      var raw = lines[i].slice(6).trim();
+      if(raw === '[DONE]') break;
+      try {
+        var parsed = JSON.parse(raw);
+        var token = (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) ? parsed.choices[0].delta.content : '';
+        fullText += token;
+        responseEl.textContent = fullText;
+        document.getElementById('guardian-realm').scrollTop = document.getElementById('guardian-realm').scrollHeight;
+      } catch(e){}
+    }
+  }
+  var isSilent = fullText.trim().toUpperCase() === 'SILENCE' || fullText.trim() === '';
+  if(isSilent){
+    responseEl.textContent = '';
+    responseEl.className = 'guardian-response';
+    glyph.className = 'guardian-glyph dimmed';
+    silenceEl.className = 'guardian-silence visible';
+    guardianState = 'silent';
+    inputArea.className = 'guardian-input-area visible';
+    btn.textContent = 'Summon Again';
+    btn.disabled = false;
+    await saveGuardianLog('', true);
+  } else {
+    guardianState = 'speaking';
+    glyph.className = 'guardian-glyph watching';
+    inputArea.className = 'guardian-input-area visible';
+    btn.textContent = 'Summon Again';
+    btn.disabled = false;
+    await saveGuardianLog(fullText, false);
+  }
+  await renderGuardianLogs();
+}
+
+async function saveGuardianLog(text, wasSilent){
+  var allDiscs = (await getDiscourses()).filter(function(d){ return !d.deleted_at && !d.isDeleted; });
+  var log = {
+    id: 'gl_' + Date.now(),
+    invoked_at: Date.now(),
+    model_used: localStorage.getItem('nq_guardian_model') || localStorage.getItem('nq_model') || '',
+    soup_snapshot_count: allDiscs.length,
+    response_text: text,
+    was_silent: wasSilent ? 1 : 0
+  };
+  await dbPut('guardian_logs', log);
+}
+
+async function renderGuardianLogs(){
+  var section = document.getElementById('guardian-logs-section');
+  var list = document.getElementById('guardian-logs-list');
+  var allLogs = await dbGetAll('guardian_logs');
+  if(!allLogs || !allLogs.length){ section.style.display = 'none'; return; }
+  var sorted = allLogs.sort(function(a,b){ return b.invoked_at - a.invoked_at; });
+  section.style.display = 'block';
+  list.innerHTML = '';
+  sorted.forEach(function(log){
+    var item = document.createElement('div');
+    item.className = 'guardian-log-item';
+    var date = new Date(log.invoked_at).toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+    if(log.was_silent){
+      item.innerHTML = '<div class="guardian-log-date">' + date + '</div><div class="guardian-log-silent">&#9689; &mdash; silence</div>';
+    } else {
+      var preview = (log.response_text || '').slice(0,120).trim();
+      item.innerHTML = '<div class="guardian-log-date">' + date + ' &middot; ' + log.soup_snapshot_count + ' discourses</div><div class="guardian-log-preview">' + escHtml(preview) + '...</div>';
+      item.addEventListener('click', function(){ openGuardianLogDetail(log); });
+    }
+    list.appendChild(item);
+  });
+}
+
+function openGuardianLogDetail(log){
+  var detail = document.getElementById('guardian-log-detail');
+  var content = document.getElementById('guardian-log-detail-content');
+  var date = new Date(log.invoked_at).toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+  content.textContent = '&#9689; ' + date + '\n\n' + log.response_text;
+  detail.classList.add('open');
+}
+
+function closeGuardianLogDetail(){
+  document.getElementById('guardian-log-detail').classList.remove('open');
+}
+
+async function handleGuardianOffer(){
+  var input = document.getElementById('guardian-input');
+  var text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+  document.getElementById('guardian-input-area').className = 'guardian-input-area';
+  document.getElementById('guardian-response').textContent = '';
+  document.getElementById('guardian-response').className = 'guardian-response';
+  document.getElementById('guardian-silence').className = 'guardian-silence';
+  await summonGuardian(text);
+}
+
 /* EVENT BINDING */
 document.addEventListener('DOMContentLoaded',()=> {
 initWorker();
@@ -3876,6 +4299,14 @@ initWorker();
   document.getElementById('btn-move-confirm').addEventListener('click',()=>{
   confirmBatchMove();
 });
+document.getElementById('btn-data-back').addEventListener('click', ()=>{
+  saveSupaFromDataPage(); // auto-save on leave
+  goBack();
+});
+document.getElementById('btn-data-export-page').addEventListener('click', ()=>exportJSON());
+document.getElementById('import-json-input-page').onchange = e => importJSON(e);
+document.getElementById('btn-data-sync-page').addEventListener('click', ()=>handleSync());
+document.getElementById('btn-data-sync').addEventListener('click',()=>{closeOverlay();handleSync();});
 document.getElementById('btn-data-export').addEventListener('click',()=>{closeOverlay();showToast('Exporting...');exportJSON();});
 document.getElementById('import-json-input').onchange=e=>{closeOverlay();importJSON(e);};
 document.getElementById('btn-data-cancel').addEventListener('click',closeOverlay);
@@ -3916,7 +4347,6 @@ document.getElementById('btn-data-cancel').addEventListener('click',closeOverlay
   document.getElementById('btn-persona-select-cancel').addEventListener('click',closeOverlay);
   document.getElementById('forge-temp').addEventListener('input',e=>{document.getElementById('forge-temp-val').textContent=parseFloat(e.target.value).toFixed(1);});
   document.querySelectorAll('.forge-section-header').forEach(h=>{h.addEventListener('click',()=>{h.parentElement.classList.toggle('open');});});
-  document.getElementById('btn-save-memory').addEventListener('click',()=>openMemoryView());
   document.getElementById('btn-memory-back').addEventListener('click',()=>{showPanel('view-chat');});
   document.getElementById('btn-add-manual-memory').addEventListener('click',addManualAnchor);
   document.getElementById('btn-chat-edit').addEventListener('click',()=>openCharacterForge(activeCharId));
@@ -3946,6 +4376,10 @@ document.addEventListener('click', (e) => {
     closeWatcherPanel();
   }
 });
+document.getElementById('btn-summon-guardian').addEventListener('click', function(){ summonGuardian(); });
+document.getElementById('btn-guardian-send').addEventListener('click', handleGuardianOffer);
+document.getElementById('btn-guardian-log-close').addEventListener('click', closeGuardianLogDetail);
+
   document.getElementById('gold-line-trigger').addEventListener('touchstart', awakenGoldLine, {passive: true});
   // Awaken the thread on movement
   const soupView = document.getElementById('view-soup');
