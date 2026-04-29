@@ -892,9 +892,13 @@ select.cosm-input {
     </div>
     </div>
 <div class="settings-group" style="margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
-    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">◈ The Watcher</label>
-    <p id="watcher-status" style="font-size:10px;color:var(--muted);margin:8px 0 0;">dormant</p>
+  <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">◈ The Watcher</label>
+  <div id="watcher-status" style="margin:10px 0 0; display:flex; align-items:center; gap:8px;">
+    <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0;" id="watcher-dot-indicator"></span>
+    <span style="font-size:11px;color:var(--text);font-family:Georgia,serif;" id="watcher-status-text">slumbering</span>
   </div>
+  <p style="font-size:9px;color:var(--muted);margin:6px 0 0 18px;" id="watcher-detail"></p>
+</div>
 
   <div class="modal-buttons" style="margin-top:25px;">
     <button class="modal-btn-cancel" onclick="closeOverlay()">Cancel</button>
@@ -1285,8 +1289,27 @@ function updateWatcherLoading(loaded, total) {
 async function updateWatcherStatusUI() {
   if (!watcherDB) return;
   const embs = await wdb.getAll('embeddings');
-  const el = document.getElementById('watcher-status');
-  if (el) el.textContent = 'active · ' + embs.length + ' engrams indexed';
+  const links = await wdb.getAll('links');
+  const rich = embs.filter(e => (e.word_count || 0) >= 80);
+  const dot = document.getElementById('watcher-dot-indicator');
+  const text = document.getElementById('watcher-status-text');
+  const detail = document.getElementById('watcher-detail');
+  
+  if (!text) return;
+  
+  if (embs.length === 0) {
+    if (dot) dot.style.opacity = '0.3';
+    text.textContent = 'slumbering';
+    if (detail) detail.textContent = 'waiting for enough material to observe';
+  } else if (rich.length < 5) {
+    if (dot) dot.style.opacity = '0.6';
+    text.textContent = 'accumulating';
+    if (detail) detail.textContent = rich.length + ' deep · ' + embs.length + ' total · threshold not met';
+  } else {
+    if (dot) dot.style.opacity = '1';
+    text.textContent = 'watching';
+    if (detail) detail.textContent = embs.length + ' engrams · ' + links.length + ' connections · threshold met';
+  }
 }
 
 async function shouldWatcherShow() {
