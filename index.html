@@ -1299,16 +1299,16 @@ async function updateWatcherStatusUI() {
   
   if (embs.length === 0) {
     if (dot) dot.style.opacity = '0.3';
-    text.textContent = 'slumbering';
-    if (detail) detail.textContent = 'waiting for enough material to observe';
+    text.textContent = 'Slumbering';
+    if (detail) detail.textContent = 'Waiting for enough material to observe';
   } else if (rich.length < 5) {
     if (dot) dot.style.opacity = '0.6';
-    text.textContent = 'accumulating';
-    if (detail) detail.textContent = rich.length + ' deep · ' + embs.length + ' total · threshold not met';
+    text.textContent = 'Accumulating';
+    if (detail) detail.textContent = rich.length + ' Deep · ' + embs.length + ' Total · threshold not met';
   } else {
     if (dot) dot.style.opacity = '1';
-    text.textContent = 'watching';
-    if (detail) detail.textContent = embs.length + ' engrams · ' + links.length + ' connections · threshold met';
+    text.textContent = 'Watching';
+    if (detail) detail.textContent = embs.length + ' Engrams · ' + links.length + ' Connections · threshold met';
   }
 }
 
