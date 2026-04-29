@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.26.2</title>
+<title>NakedQuantum_dev v0.26.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -963,6 +963,11 @@ select.cosm-input {
     <span style="font-size:11px;color:var(--text);font-family:Georgia,serif;" id="watcher-status-text">slumbering</span>
   </div>
   <p style="font-size:9px;color:var(--muted);margin:6px 0 0 18px;" id="watcher-detail"></p>
+  <div style="margin-top:12px;display:flex;gap:8px;">
+  <button onclick="devForcePass()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Force Pass</button>
+  <button onclick="devClearWatcher()" style="background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Clear Index</button>
+</div>
+
 </div>
 
   <div class="modal-buttons" style="margin-top:25px;">
@@ -1274,15 +1279,20 @@ function initWorker(){
 }
 
 /* ── WATCHER ENGINE (MAIN THREAD SHADOW QUEUE) ──────────────── */
+// DEV MODE: flip to false before shipping to production
+const NQ_DEV_MODE = true;
+
 const W_MODEL_ID = 'Xenova/bge-base-en-v1.5';
-const W_SIMILARITY_THRESHOLD = 0.82;
+const W_SIMILARITY_THRESHOLD = NQ_DEV_MODE ? 0.50 : 0.82;
 const W_DECAY_ACTIVE_DAYS = 25;
 const W_LINK_EXPIRY_DAYS = 60;
-const W_SILENT_PERIOD_HOURS = 48;
+const W_SILENT_PERIOD_HOURS = NQ_DEV_MODE ? 0 : 48;
+const W_MIN_RICH_DISCOURSES = NQ_DEV_MODE ? 1 : 5;
 const W_TITLE_WEIGHT = 0.3;
 const W_BODY_WEIGHT = 0.7;
 const W_SPARK_BOOST = 1.1;
 const W_DAY_MS = 86400000;
+const W_PASS_COOLDOWN_HOURS = NQ_DEV_MODE ? 0 : 20;
 
 let watcherEmbedder = null;
 let watcherDB = null;
@@ -1381,7 +1391,8 @@ async function shouldWatcherShow() {
   if (!watcherDB) return false;
   const embs = await wdb.getAll('embeddings');
   const rich = embs.filter(e => (e.word_count || 0) >= 80);
-  return rich.length >= 5;
+  return rich.length >= W_MIN_RICH_DISCOURSES;
+
 }
 
 async function initWatcher() {
@@ -1507,10 +1518,36 @@ function scheduleWatcherPass() {
   if (!isWatcherReady) return;
   const lastRun = parseInt(localStorage.getItem('nq_watcher_last_pass') || '0');
   const hoursSince = (Date.now() - lastRun) / 3600000;
-  if (hoursSince > 20) {
+  if (hoursSince > W_PASS_COOLDOWN_HOURS) {
     setTimeout(() => runSimilarityPassMain(), 10000);
   }
 }
+
+async function devForcePass() {
+  if (!isWatcherReady) { showToast('Watcher not ready yet'); return; }
+  localStorage.removeItem('nq_watcher_last_pass');
+  showToast('Running pass...');
+  await runSimilarityPassMain();
+  await updateWatcherStatusUI();
+  await refreshWatcherDot();
+  showToast('Pass complete');
+}
+
+async function devClearWatcher() {
+  if (!watcherDB) { showToast('No watcher DB'); return; }
+  const embs = await wdb.getAll('embeddings');
+  const links = await wdb.getAll('links');
+  for (const e of embs) await wdb.delete('embeddings', e.id);
+  for (const l of links) await wdb.delete('links', l.id);
+  localStorage.removeItem('nq_watcher_last_pass');
+  localStorage.removeItem('nq_watcher_awakened');
+  _watcherHasLinks = false;
+  _watcherCurrentLinks = [];
+  hideWatcherDot();
+  await updateWatcherStatusUI();
+  showToast('Watcher index cleared');
+}
+
 
 /* ── WATCHER GOLD DOT UI ───────────────────────────────────── */
 const WATCHER_ANCHORS = [
@@ -1521,7 +1558,7 @@ const WATCHER_ANCHORS = [
   { top: '70%',   right: '16px' },
   { top: '30%',   left: '40px' },
   { top: '50%',   left: '40px' },
-  { bottom: '90px', left: '50%' },
+  { bottom: '115px', left: '50%' },
 ];
 
 let _watcherDotAnchor = -1;
@@ -1589,14 +1626,23 @@ async function openWatcherPanel() {
     item.addEventListener('click', () => { closeWatcherPanel(); openDiscourse(link.a); });
     list.appendChild(item);
   }
-  const dot = document.getElementById('watcher-dot');
+    const dot = document.getElementById('watcher-dot');
   const dotRect = dot?.getBoundingClientRect();
   if (dotRect) {
-    const top = Math.min(dotRect.top, window.innerHeight - 260);
-    const left = dotRect.left > window.innerWidth / 2 ? dotRect.left - 220 : dotRect.right + 10;
+    const panelW = 260;
+    const panelH = 200;
+    const margin = 8;
+    let left = dotRect.left > window.innerWidth / 2
+      ? dotRect.left - panelW - 10
+      : dotRect.right + 10;
+    let top = dotRect.top - panelH / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - panelW - margin));
+    top = Math.max(70, Math.min(top, window.innerHeight - panelH - 100));
     panel.style.top = top + 'px';
-    panel.style.left = Math.max(8, left) + 'px';
+    panel.style.left = left + 'px';
+    panel.style.right = 'auto';
   }
+  
   panel.classList.add('visible');
 }
 
@@ -3920,6 +3966,13 @@ document.addEventListener('click', (e) => {
   
   // Final boot trigger with Gatekeeper
   async function bootApp() {
+  const DEV_MODE = true;
+  
+  if(DEV_MODE) {
+    document.getElementById('lock-screen').style.display = 'none';
+    await init();
+    return;
+  }
     const lockScreen = document.getElementById('lock-screen');
     const manualBtn = document.getElementById('btn-manual-unlock');
     
