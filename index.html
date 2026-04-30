@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.28</title>
+<title>NakedQuantum_dev v0.28.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -1197,6 +1197,7 @@ try {
 
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders(id TEXT PRIMARY KEY, name TEXT, parent_id TEXT, created_at INTEGER, updated_at INTEGER, is_deleted INTEGER DEFAULT 0)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses(id TEXT PRIMARY KEY, title TEXT, raw_text TEXT, folder_id TEXT, source_link TEXT, item_type TEXT, tags TEXT, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
+ db.run("CREATE TABLE IF NOT EXISTS guardian_summaries(id TEXT PRIMARY KEY, discourse_id TEXT, summary TEXT, word_count INTEGER, created_at INTEGER, updated_at INTEGER)");
   db.run("CREATE TABLE IF NOT EXISTS characters(id TEXT PRIMARY KEY, name TEXT, role TEXT, backstory TEXT, personality TEXT, lorebook TEXT, scenario TEXT, inclination TEXT, relationships TEXT, pc_info TEXT, player_role_id TEXT, image TEXT, temperature REAL DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
   // THE FIX: History and Summaries now use TEXT IDs (UUID/Timestamps)
   db.run("CREATE TABLE IF NOT EXISTS history(id TEXT PRIMARY KEY, charId TEXT, role TEXT, content TEXT, created_at INTEGER)");
@@ -1212,7 +1213,7 @@ try {
   db.run("CREATE TABLE IF NOT EXISTS history_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS guardian_logs(id TEXT PRIMARY KEY, invoked_at INTEGER, model_used TEXT, soup_snapshot_count INTEGER, response_text TEXT, was_silent INTEGER DEFAULT 0)");
 
-  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks', 'guardian_logs'].forEach
+  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks', 'guardian_logs', 'guardian_summaries'].forEach
 (t => {
     try {
       const info = db.exec("PRAGMA table_info(" + t + ")");
@@ -1601,10 +1602,24 @@ async function runSimilarityPassMain() {
   const linkExpiryCutoff = now - (W_LINK_EXPIRY_DAYS * W_DAY_MS);
   const silentCutoff = now - (W_SILENT_PERIOD_HOURS * 3600000);
   const allEmbeddings = await wdb.getAll('embeddings');
-  const active = allEmbeddings.filter(e => e.last_seen_active > activeCutoff);
+  
+  // Constraint 1 -- only rich content (80+ words)
+  const active = allEmbeddings.filter(e => 
+    e.last_seen_active > activeCutoff && 
+    (e.word_count || 0) >= 80
+  );
   if (active.length < 2) return;
-  const setA = active.filter(e => e.last_seen_active > (now - (7 * W_DAY_MS)) && e.created_at < silentCutoff);
-  const setB = active;
+
+  // Constraint 2 -- setA max 20 recent items
+  const setA = active
+    .filter(e => e.last_seen_active > (now - (7 * W_DAY_MS)) && e.created_at < silentCutoff)
+    .slice(0, 20);
+
+  // Constraint 3 -- setB max 200 items, prioritise richest content
+  const setB = active
+    .sort((a, b) => (b.word_count || 0) - (a.word_count || 0))
+    .slice(0, 200);
+
   for (let i = 0; i < setA.length; i++) {
     const a = setA[i];
     const vecA = new Float32Array(a.vector);
@@ -1618,8 +1633,10 @@ async function runSimilarityPassMain() {
         await wdb.put('links', { id: linkId, a: a.id, b: b.id, score: Math.round(finalScore * 1000) / 1000, created_at: now });
       }
     }
+    // Breathe every 5 items
     if (i % 5 === 0) await new Promise(r => setTimeout(r, 20));
   }
+
   await wdb.deleteOlderThan('links', 'created_at', linkExpiryCutoff);
   for (const e of active) { await wdb.put('embeddings', { ...e, last_seen_active: now }); }
   localStorage.setItem('nq_watcher_last_pass', now.toString());
@@ -2966,6 +2983,8 @@ async function saveCurrentDiscourse(silent=false){
   if (isWatcherReady && currentDiscourseId) {
     const disc = await getDiscourse(currentDiscourseId);
     if (disc && disc.item_type) queueWatcherEmbed(currentDiscourseId, title, raw_text, disc.item_type);
+    // Background pre-summarise for Guardian -- non-blocking
+setTimeout(()=>presSummariseForGuardian(currentDiscourseId),2000);
   }
 }
 
@@ -3157,6 +3176,43 @@ async function handleChatSend(){
   }
   isSending = false;
 }
+
+async function presSummariseForGuardian(discourseId){
+  const d=await getDiscourse(discourseId);
+  if(!d||!d.raw_text||d.raw_text.trim().length<30)return;
+  const key=localStorage.getItem('nq_api_key')||'';
+  if(!key)return;
+  const existing=await dbGet('guardian_summaries',discourseId);
+  // Skip if already summarised and not updated since
+  if(existing&&existing.updated_at>=d.updated_at)return;
+  const wordCount=d.raw_text.trim().split(/\s+/).filter(Boolean).length;
+  if(wordCount<30)return;
+  try{
+    const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'deepseek/deepseek-v4-flash',
+        max_tokens:300,
+        messages:[
+          {role:'system',content:'Precise summariser. One dense paragraph, max 100 words. Core themes, tensions, emotional texture. No preamble.'},
+          {role:'user',content:`Title: ${d.title}\n\n${d.raw_text.slice(0,2000)}`}
+        ]
+      })
+    });
+    const data=await res.json();
+    const summary=data.choices?.[0]?.message?.content?.trim()||d.raw_text.slice(0,200);
+    await dbPut('guardian_summaries',{
+      id:discourseId,
+      discourse_id:discourseId,
+      summary,
+      word_count:wordCount,
+      created_at:Date.now(),
+      updated_at:Date.now()
+    });
+  }catch(e){}
+}
+
 
 async function summariseHistory(charId,messages){
   const key=localStorage.getItem("nq_api_key")||"";
@@ -4092,7 +4148,7 @@ async function summonGuardian(userAddition){
   sub.textContent = '';
   try {
     var allDiscs = (await getDiscourses()).filter(function(d){ return !d.deleted_at && !d.isDeleted; });
-    var summaries = await buildGuardianContext(allDiscs, apiKey, baseUrl, guardianModel);
+    var summaries = await buildGuardianContext(allDiscs);
     var allLogs = await dbGetAll('guardian_logs');
     var recentLogs = allLogs.filter(function(l){ return !l.was_silent; }).sort(function(a,b){ return b.invoked_at - a.invoked_at; }).slice(0,2);
     var contextBlock = 'ARCHIVE SUMMARIES (' + allDiscs.length + ' discourses):\n\n' + summaries;
@@ -4118,14 +4174,21 @@ async function summonGuardian(userAddition){
   }
 }
 
-async function buildGuardianContext(discs, apiKey, baseUrl, model){
-  var results = [];
-  var BATCH = 5;
-  for(var i = 0; i < discs.length; i += BATCH){
-    var batch = discs.slice(i, i + BATCH);
-    var batchResults = await Promise.all(batch.map(function(d){ return summariseDiscourseForGuardian(d, apiKey, baseUrl, model); }));
-    results.push.apply(results, batchResults);
-    await new Promise(function(r){ setTimeout(r, 80); });
+async function buildGuardianContext(discs){
+  const results=[];
+  for(const d of discs){
+    const wordCount=(d.raw_text||'').trim().split(/\s+/).filter(Boolean).length;
+    const date=new Date(d.created_at||Date.now()).toLocaleDateString('en-US',{month:'short',year:'numeric'});
+    // Try pre-stored summary first
+    const stored=await dbGet('guardian_summaries',d.id);
+    if(stored&&stored.summary){
+      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${stored.summary}`);
+    } else if(wordCount<30){
+      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${(d.raw_text||'').slice(0,200)}`);
+    } else {
+      // Fallback to first 200 chars if no pre-summary
+      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${(d.raw_text||'').slice(0,200)}...`);
+    }
   }
   return results.join('\n\n');
 }
