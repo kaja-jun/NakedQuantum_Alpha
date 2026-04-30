@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.28.2</title>
+<title>NakedQuantum_dev v0.28.3</title>
 <style>
 :root {
   --bg: #000000;
@@ -965,46 +965,6 @@ select.cosm-input {
   <div class="modal-buttons">
     <button class="modal-btn-cancel" id="btn-folder-cancel">Cancel</button>
     <button class="modal-btn-confirm" id="btn-folder-confirm">Create</button>
-  </div>
-</div>
-
-<div class="cosm-modal" id="data-modal">
-  <div class="modal-title">⩔ Data Sovereignty</div>
-  <div class="management-actions">
-    <button class="management-btn export" id="btn-data-export">
-      <span>⩔</span> Export Backup (JSON)
-    </button>
-    <label class="management-btn export" style="cursor:pointer;">
-      <span>⩓</span> Import Backup
-      <input type="file" accept=".json" id="import-json-input" style="display:none;">
-    </label>
-    <button class="management-btn export" id="btn-data-sync" style="border-color:var(--accent-dim);">
-      <span>∞</span> Sync to Supabase
-    </button>
-  </div>
-  <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px;">
-    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Sovereign Key Backup</label>
-    <p style="font-size:10px;color:var(--muted);line-height:1.4;margin:4px 0 8px;">If you lose this key and your device, your words belong to the Abyss forever.</p>
-    <button onclick="showSovereignKey()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);width:100%;height:40px;border-radius:8px;font-weight:900;font-size:11px;">Reveal & Copy Key</button>
-    <input type="text" id="export-key-display" class="cosm-input" readonly style="display:none;margin-top:8px;text-align:center;font-family:monospace;font-size:11px;color:#a0d8a0;border-color:#a0d8a0;">
-  </div>
-  <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
-    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">Akashic Records (Cold Backup)</label>
-    <div style="display:flex;gap:8px;margin-top:8px;">
-      <button onclick="backupToAkashic()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);flex:1;height:40px;border-radius:8px;font-weight:700;font-size:11px;">Push to R2</button>
-      <button onclick="restoreFromAkashic()" style="background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:40px;border-radius:8px;font-weight:900;font-size:11px;">Pull from R2</button>
-    </div>
-  </div>
-  <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
-    <label style="font-size:11px;color:var(--muted);text-transform:uppercase;">◈ The Watcher</label>
-    <div id="watcher-status" style="margin:10px 0 0;display:flex;align-items:center;gap:8px;">
-      <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0;" id="watcher-dot-indicator"></span>
-      <span style="font-size:11px;color:var(--text);font-family:Georgia,serif;" id="watcher-status-text">slumbering</span>
-    </div>
-    <p style="font-size:9px;color:var(--muted);margin:6px 0 0 18px;" id="watcher-detail"></p>
-  </div>
-  <div class="modal-buttons" style="margin-top:12px;">
-    <button class="modal-btn-cancel" id="btn-data-cancel">Close</button>
   </div>
 </div>
 
@@ -2031,57 +1991,6 @@ async function init(){
   initWatcher();
 }
 
-/*Naked Handle*/
-async function handleSend() {
-  const input = document.getElementById('userInput');
-  const text = input.value.trim();
-  if (!text) return;
-
-  const apiKey = localStorage.getItem('nq_api_key');
-  const activeModel = localStorage.getItem('nq_model') || "gpt-4o"; 
-  const baseUrl = localStorage.getItem('nq_base_url') || "https://openrouter.ai/api/v1";
-  const strikeUrl = `${baseUrl}/chat/completions`;
-
-  if (!apiKey) {
-    showToast("Neural Link Failure: No API Key ◆");
-    return;
-  }
-
-  appendMessage('user', text);
-  input.value = '';
-
-  const historyData = await getFromDB('history', 'current_thread') || { messages: [] };
-  historyData.messages.push({ role: 'user', content: text });
-
-  try {
-    const response = await fetch(strikeUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "X-Title": "NakedQuantum"
-      },
-      body: JSON.stringify({
-        model: activeModel,
-        messages: historyData.messages,
-        temperature: 0.7
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-    const aiText = data.choices[0].message.content;
-
-    appendMessage('assistant', aiText);
-    historyData.messages.push({ role: 'assistant', content: aiText });
-    await saveToDB('history', { id: 'current_thread', messages: historyData.messages });
-
-  } catch (err) {
-    console.error("Strike Failed:", err);
-    showToast(`Strike Interrupted: ${err.message}`);
-  }
-}
-
 /* BURN DISC */
 async function openBurnDiscModal(){
   const chars=await getCharacters();
@@ -2546,11 +2455,6 @@ function updateHeaderButtons(){
     document.getElementById('hdr-sanctuary-search').onclick=function(){ openSanctuarySearch(); };
   }
   }
-
-function openDataModal(){
-  document.getElementById('data-modal').classList.add('visible');
-  document.getElementById('cosm-overlay').classList.add('active');
-}
 
 async function goBack() {
   if (currentView === 'lighthouse' && currentDiscourseId) {
@@ -3803,8 +3707,6 @@ function removeActiveModel() {
 function openSettingsModal(){
   document.getElementById('input-api-key').value = localStorage.getItem('nq_api_key') || '';
   document.getElementById('input-base-url').value = localStorage.getItem('nq_base_url') || 'https://openrouter.ai/api/v1';
-  document.getElementById('input-supa-url').value = localStorage.getItem('nq_supa_url') || '';
-  document.getElementById('input-supa-key').value = localStorage.getItem('nq_supa_key') || '';
   renderModelSelect();
   document.getElementById('settings-modal').classList.add('visible');
   document.getElementById('cosm-overlay').classList.add('active');
@@ -3814,7 +3716,7 @@ function closeOverlay(){
   document.getElementById("cosm-overlay").classList.remove("active");
   ['folder-modal','rename-modal','move-modal',
  'global-search-modal','capture-modal','discourse-modal','settings-modal',
- 'burn-disc-modal','data-modal','role-modal','persona-select-modal'
+ 'burn-disc-modal','role-modal','persona-select-modal'
   ].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
 }
 
@@ -4024,11 +3926,7 @@ async function handleSync() {
   const supaKey = localStorage.getItem('nq_supa_key');
   if (!supaUrl || !supaKey) { showToast("⚠ Add Supabase keys in Settings"); return; }
   if (!window.sessionSovereignKey) { showToast("⚠ Unlock Abyss first"); return; }
-
   showToast("Syncing with the Void...");
-  const syncBtn = document.getElementById('hdr-sync');
-  syncBtn.style.opacity = '0.5';
-
   try {
     const lastSync = parseInt(localStorage.getItem('nq_last_sync') || '0');
     let newLastSync = lastSync;
@@ -4094,8 +3992,6 @@ async function handleSync() {
   } catch (e) {
     console.error("Sync Error:", e);
     showToast("⚠ Sync Interrupted");
-  } finally {
-    syncBtn.style.opacity = '1';
   }
 }
 
@@ -4191,33 +4087,6 @@ async function buildGuardianContext(discs){
     }
   }
   return results.join('\n\n');
-}
-
-async function summariseDiscourseForGuardian(disc, apiKey, baseUrl, model){
-  var text = (disc.raw_text || '').trim();
-  var title = disc.title || 'Untitled';
-  var date = new Date(disc.created_at || Date.now()).toLocaleDateString('en-US', {month:'short', year:'numeric'});
-  var wordCount = text.split(/\s+/).filter(Boolean).length;
-  if(wordCount < 30){ return '[' + date + '] "' + title + '" (' + wordCount + 'w): ' + text.slice(0,200); }
-  try {
-    var res = await fetch(baseUrl + '/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json', 'X-Title': 'NakedQuantum' },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: 120,
-        messages: [
-          { role: 'system', content: 'You are a precise summariser. Return one dense paragraph max 100 words capturing core themes, tensions and emotional texture. No preamble.' },
-          { role: 'user', content: 'Title: ' + title + '\n\n' + text.slice(0,2000) }
-        ]
-      })
-    });
-    var data = await res.json();
-    var summary = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) ? data.choices[0].message.content.trim() : text.slice(0,200);
-    return '[' + date + '] "' + title + '" (' + wordCount + 'w): ' + summary;
-  } catch(e){
-    return '[' + date + '] "' + title + '" (' + wordCount + 'w): ' + text.slice(0,200);
-  }
 }
 
 async function streamGuardianResponse(contextBlock, apiKey, baseUrl, model){
@@ -4369,10 +4238,6 @@ document.getElementById('btn-data-back').addEventListener('click', ()=>{
 document.getElementById('btn-data-export-page').addEventListener('click', ()=>exportJSON());
 document.getElementById('import-json-input-page').onchange = e => importJSON(e);
 document.getElementById('btn-data-sync-page').addEventListener('click', ()=>handleSync());
-document.getElementById('btn-data-sync').addEventListener('click',()=>{closeOverlay();handleSync();});
-document.getElementById('btn-data-export').addEventListener('click',()=>{closeOverlay();showToast('Exporting...');exportJSON();});
-document.getElementById('import-json-input').onchange=e=>{closeOverlay();importJSON(e);};
-document.getElementById('btn-data-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-global-search-cancel').addEventListener('click',closeGlobalSearch);
   document.getElementById('global-search-input').addEventListener('input',e=>onGlobalSearchInput(e.target.value));
   document.getElementById('capture-folder').addEventListener('change',function(){const inp=document.getElementById('capture-new-folder-input');inp.style.display=this.value==='__new__'?'block':'none';if(this.value==='__new__')setTimeout(()=>inp.focus(),50);});
@@ -4394,9 +4259,6 @@ document.getElementById('btn-data-cancel').addEventListener('click',closeOverlay
   localStorage.setItem('nq_api_key', document.getElementById('input-api-key').value.trim());
   localStorage.setItem('nq_base_url', document.getElementById('input-base-url').value.trim());
   localStorage.setItem('nq_model', document.getElementById('input-model').value); 
-  localStorage.setItem('nq_supa_url', document.getElementById('input-supa-url').value.trim());
-  localStorage.setItem('nq_supa_key', document.getElementById('input-supa-key').value.trim());
-
   closeOverlay();
   showToast("Gateway Solidified ◆");
 });
