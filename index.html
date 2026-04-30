@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.28.3</title>
+<title>NakedQuantum_dev v0.29</title>
 <style>
 :root {
   --bg: #000000;
@@ -395,6 +395,63 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .char-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 8px; }
 .char-card-meta { font-size: 9px; color: var(--muted); letter-spacing: 0.5px; }
 
+/* IMMUTABLE ENTITIES */
+.ie-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ie-row:active { background: var(--surface2); }
+.ie-sigil {
+  width: 48px; height: 48px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-dim);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.ie-sigil svg { width: 36px; height: 36px; }
+.ie-sigil.draft { border-color: var(--border); opacity: 0.5; }
+.ie-info { flex: 1; min-width: 0; }
+.ie-name {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ie-name .diamond {
+  font-size: 8px; color: var(--accent); flex-shrink: 0;
+}
+.ie-archetype {
+  font-size: 10px; letter-spacing: 2px; color: var(--accent-dim);
+  text-transform: uppercase; margin-top: 2px;
+}
+.ie-function {
+  font-size: 12px; color: var(--muted); font-style: italic;
+  margin-top: 3px; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ie-meta {
+  font-size: 9px; color: var(--muted); opacity: 0.6;
+  margin-top: 4px; letter-spacing: 0.5px;
+}
+.ie-empty {
+  text-align: center; padding: 60px 20px; opacity: 0.3;
+  font-family: var(--font-serif); font-size: 14px; line-height: 1.8; color: var(--muted);
+}
+.ie-manifest-section { }
+.ie-manifest-label {
+  font-size: 9px; letter-spacing: 3px; color: var(--accent);
+  opacity: 0.5; font-weight: 900; text-transform: uppercase; margin-bottom: 4px;
+}
+.ie-manifest-text {
+  font-family: var(--font-serif); font-size: 14px; color: var(--text);
+  line-height: 1.7; opacity: 0.85;
+}
+
 .forge-view { background: var(--bg); overflow: hidden; }
 .forge-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px 16px 100px; }
 .forge-container { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
@@ -557,7 +614,6 @@ select.cosm-input {
   text-transform: uppercase;
   cursor: pointer;
 }
-
 
 #cosm-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; padding: 9px 20px; border-radius: 20px; font-size: 12px; font-weight: 900; letter-spacing: 1px; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.25s; white-space: nowrap; }
 
@@ -780,6 +836,18 @@ select.cosm-input {
 </div>
     <div class="table-surface" id="sanctuary-surface"></div>
   </div>
+  <div class="view-panel hidden" id="view-ie" style="background:var(--bg);display:flex;flex-direction:column;">
+  <div class="lighthouse-nav">
+    <button class="btn-back-table" id="btn-ie-back">← Sanctuary</button>
+    <div style="font-size:10px;letter-spacing:2px;color:var(--accent);font-weight:900;">∞ IMMUTABLE</div> 
+    <div style="width:52px;"></div>
+  <button class="tbtn gold" id="btn-ie-dev-forge" style="font-size:10px;">+ Forge Draft</button>
+  </div>
+  <div style="padding:12px 16px 8px;flex-shrink:0;">
+    <input class="cosm-input" id="ie-search-input" placeholder="Search by name, archetype, or function..." style="font-size:13px;">
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 100px;" id="ie-list-surface"></div>
+</div>
 
   <div class="view-panel forge-view hidden" id="view-forge">
     <div class="forge-scroll">
@@ -883,6 +951,7 @@ select.cosm-input {
       <div class="chat-char-name" id="chat-char-name">Character Name</div>
     </div>
 <div id="chat-persona-pill" style="font-size:9px;letter-spacing:1px;color:var(--accent-dim);border:1px solid var(--border);padding:3px 8px;border-radius:20px;cursor:pointer;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;">⚝ default</div>
+<div id="ie-model-chip" style="display:none;font-size:9px;letter-spacing:1px;color:var(--accent-dim);border:1px solid var(--border);padding:3px 8px;border-radius:20px;cursor:pointer;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;" onclick="cycleIEModel()"></div>
     <button class="tbtn" id="btn-chat-edit">✎</button>
     <button class="tbtn" id="btn-chat-clear">✕</button>
   </div>
@@ -1058,6 +1127,41 @@ select.cosm-input {
   </div>
 </div>
 
+<div class="cosm-modal" id="ie-manifest-modal">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:10px;">
+    <div id="ie-manifest-sigil" style="width:64px;height:64px;display:flex;align-items:center;justify-content:center;"></div>
+    <div id="ie-manifest-name" style="font-family:var(--font-serif);font-size:22px;font-weight:700;color:var(--text);text-align:center;"></div>
+    <div id="ie-manifest-archetype" style="font-size:10px;letter-spacing:3px;color:var(--accent-dim);text-transform:uppercase;"></div>
+    <div id="ie-manifest-function" style="font-size:13px;color:var(--muted);font-style:italic;text-align:center;max-width:280px;line-height:1.5;"></div>
+  </div>
+  <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px;display:flex;flex-direction:column;gap:14px;">
+    <div class="ie-manifest-section">
+      <div class="ie-manifest-label">Origin</div>
+      <div class="ie-manifest-text" id="ie-manifest-origin"></div>
+    </div>
+    <div class="ie-manifest-section">
+      <div class="ie-manifest-label">Function</div>
+      <div class="ie-manifest-text" id="ie-manifest-role"></div>
+    </div>
+    <div class="ie-manifest-section">
+      <div class="ie-manifest-label">Constraint</div>
+      <div class="ie-manifest-text" id="ie-manifest-constraint"></div>
+    </div>
+    <div class="ie-manifest-section">
+      <div class="ie-manifest-label">Voice</div>
+      <div class="ie-manifest-text" id="ie-manifest-voice"></div>
+    </div>
+  </div>
+  <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;display:flex;align-items:center;justify-content:space-between;">
+    <div id="ie-manifest-meta" style="font-size:9px;color:var(--muted);letter-spacing:0.5px;"></div>
+    <div id="ie-manifest-models" style="font-size:9px;color:var(--accent-dim);letter-spacing:0.5px;"></div>
+  </div>
+  <div class="modal-buttons" style="margin-top:14px;">
+    <button class="modal-btn-cancel" id="btn-ie-manifest-close">Close</button>
+    <button class="modal-btn-confirm" id="btn-ie-manifest-enter" style="letter-spacing:2px;">ENTER</button>
+  </div>
+</div>
+
 <div class="cosm-modal" id="persona-select-modal">
   <div class="modal-title">⁂ Your Role Here</div>
   <div class="management-actions" id="persona-select-list"></div>
@@ -1101,6 +1205,9 @@ const AKASHIC_URL='https://wandering-violet-964a.gazajar.workers.dev';
 
 let cosmUserId=localStorage.getItem('cosm_user_id')||crypto.randomUUID();
 localStorage.setItem('cosm_user_id',cosmUserId);
+
+let activeIE = null;
+
 let longPressTimer=null,isLongPress=false,longPressConsumed=false,touchStartPos={x:0,y:0};
 const LONG_PRESS_DURATION=1000,MOVE_THRESHOLD=10;
 
@@ -1158,6 +1265,8 @@ try {
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders(id TEXT PRIMARY KEY, name TEXT, parent_id TEXT, created_at INTEGER, updated_at INTEGER, is_deleted INTEGER DEFAULT 0)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses(id TEXT PRIMARY KEY, title TEXT, raw_text TEXT, folder_id TEXT, source_link TEXT, item_type TEXT, tags TEXT, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
  db.run("CREATE TABLE IF NOT EXISTS guardian_summaries(id TEXT PRIMARY KEY, discourse_id TEXT, summary TEXT, word_count INTEGER, created_at INTEGER, updated_at INTEGER)");
+ db.run("CREATE TABLE IF NOT EXISTS immutable_entities(id TEXT PRIMARY KEY, display_name TEXT NOT NULL, archetype_tag TEXT, existential_function TEXT, system_prompt_core TEXT, constraints TEXT, voice_limits TEXT, memory_policy TEXT DEFAULT 'stateless', model_variants TEXT, example_turns TEXT, watcher_thresholds TEXT, guardian_audit_hash TEXT, sigil_svg TEXT, locked_at INTEGER, signature TEXT, is_hidden INTEGER DEFAULT 0, created_at INTEGER, updated_at INTEGER)");
+db.run("CREATE TABLE IF NOT EXISTS immutable_entities_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS characters(id TEXT PRIMARY KEY, name TEXT, role TEXT, backstory TEXT, personality TEXT, lorebook TEXT, scenario TEXT, inclination TEXT, relationships TEXT, pc_info TEXT, player_role_id TEXT, image TEXT, temperature REAL DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
   // THE FIX: History and Summaries now use TEXT IDs (UUID/Timestamps)
   db.run("CREATE TABLE IF NOT EXISTS history(id TEXT PRIMARY KEY, charId TEXT, role TEXT, content TEXT, created_at INTEGER)");
@@ -1173,7 +1282,7 @@ try {
   db.run("CREATE TABLE IF NOT EXISTS history_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS guardian_logs(id TEXT PRIMARY KEY, invoked_at INTEGER, model_used TEXT, soup_snapshot_count INTEGER, response_text TEXT, was_silent INTEGER DEFAULT 0)");
 
-  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks', 'guardian_logs', 'guardian_summaries'].forEach
+  ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks', 'guardian_logs', 'guardian_summaries', 'immutable_entities'].forEach
 (t => {
     try {
       const info = db.exec("PRAGMA table_info(" + t + ")");
@@ -1774,6 +1883,237 @@ const setEncryptionKey = (keyBytes) => _workerReady.then(() => new Promise((res,
   const msgId = ++_id; _pending[msgId] = { resolve: res, reject: rej };
   _worker.postMessage({ id: msgId, action: 'SET_KEY', data: { keyBytes: Array.from(keyBytes) } });
 }));
+
+/* IMMUTABLE ENTITY */
+
+const getImmutableEntities = () => dbGetAll("immutable_entities");
+const getImmutableEntity = (id) => dbGet("immutable_entities", id);
+async function saveImmutableEntity(data) {
+  const now = Date.now();
+  const entity = { ...data, created_at: data.created_at || now, updated_at: now };
+  await dbPut("immutable_entities", entity);
+  return entity;
+}
+
+function openIEPage(){
+  showPanel('view-ie');
+  document.getElementById('ie-search-input').value = '';
+  renderIEList();
+}
+
+function renderIEList(filterQuery = ''){
+  const surface = document.getElementById('ie-list-surface');
+  surface.innerHTML = '';
+  
+  getImmutableEntities().then(entities => {
+    const q = filterQuery.toLowerCase();
+    const filtered = entities.filter(e => 
+      (!e.is_deleted) && 
+      (!q || (e.display_name||'').toLowerCase().includes(q) 
+      || (e.archetype_tag||'').toLowerCase().includes(q)
+      || (e.existential_function||'').toLowerCase().includes(q))
+    );
+    
+    if(!filtered.length && !q){
+      surface.innerHTML = `
+        <div class="ie-empty">
+          No immutable entities yet.<br>
+          These are forged over time --<br>
+          conversations that become rooms.<br>
+          When a character is ready,<br>
+          the Lock Ceremony makes it permanent.
+        </div>`;
+      return;
+    }
+    if(!filtered.length && q){
+      surface.innerHTML = '<div class="table-empty"><div class="table-empty-glyph">∞</div><div class="table-empty-text">No match found</div></div>';
+      return;
+    }
+    
+    filtered.forEach(e => {
+      const isLocked = !!e.signature;
+      const date = new Date(e.locked_at || e.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      
+      // THE FIX: Safely handle auto-parsed arrays from the DB worker
+      let models =[];
+      if (Array.isArray(e.model_variants)) models = e.model_variants;
+      else if (typeof e.model_variants === 'string') { try { models = JSON.parse(e.model_variants); } catch(err){} }
+      
+      const modelStr = models.length ? models.map(m => m.model_id?.split('/').pop()).join(' · ') : '';
+      
+      const row = document.createElement('div');
+      row.className = 'ie-row';
+      row.innerHTML = `
+        <div class="ie-sigil${isLocked ? '' : ' draft'}">${e.sigil_svg || '◈'}</div>
+        <div class="ie-info">
+          <div class="ie-name">${escHtml(e.display_name||'Unnamed')}${isLocked ? '<span class="diamond">◆</span>' : ''}</div>
+          ${e.archetype_tag ? `<div class="ie-archetype">${escHtml(e.archetype_tag)}</div>` : ''}
+          ${e.existential_function ? `<div class="ie-function">${escHtml(e.existential_function)}</div>` : ''}
+          <div class="ie-meta">${isLocked ? 'locked' : 'draft'} · ${date}${modelStr ? ' · ' + modelStr : ''}</div>
+        </div>
+      `;
+      if(!isLocked){
+        const lockBtn = document.createElement('button');
+        lockBtn.style.cssText = 'margin-top:6px;background:none;border:1px solid var(--accent-dim);color:var(--accent);font-size:9px;padding:3px 10px;border-radius:6px;font-weight:700;letter-spacing:1px;';
+        lockBtn.textContent = '◆ Lock';
+        lockBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          devQuickLock(e.id);
+        });
+        row.querySelector('.ie-info').appendChild(lockBtn);
+      }
+      row.addEventListener('click', () => {
+        if(isLocked){
+          openIEBottomSheet(e.id);
+        } else {
+          showToast('◈ This entity is still being forged');
+        }
+      });
+      surface.appendChild(row);
+    });
+  });
+}
+
+function openIEBottomSheet(id){
+  getImmutableEntity(id).then(e => {
+    if(!e) return;
+    
+    const sigilEl = document.getElementById('ie-manifest-sigil');
+    sigilEl.innerHTML = e.sigil_svg || '◈';
+    
+    document.getElementById('ie-manifest-name').textContent = e.display_name || 'Unnamed';
+    document.getElementById('ie-manifest-archetype').textContent = e.archetype_tag || '';
+    document.getElementById('ie-manifest-function').textContent = e.existential_function || '';
+    
+    // Map fields: system_prompt_core → Origin, backstory extracted or first line
+    // We'll use constraints field for Constraint, voice_limits for Voice
+    // The character forge stores: backstory, personality, etc.
+    // For IE, the manifest fields come from the IE-specific columns
+    document.getElementById('ie-manifest-origin').textContent = e.system_prompt_core || 'Forged from sustained encounter.';
+    document.getElementById('ie-manifest-role').textContent = e.existential_function || '';
+    document.getElementById('ie-manifest-constraint').textContent = e.constraints || 'Will not soften. Will not perform.';
+    document.getElementById('ie-manifest-voice').textContent = e.voice_limits || 'As required by truth.';
+    
+    const date = new Date(e.locked_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    document.getElementById('ie-manifest-meta').textContent = `locked ${date}`;
+    
+    let models = e.model_variants;
+if (typeof models === 'string') {
+  try { models = JSON.parse(models); } catch(e) { models = []; }
+} else if (!Array.isArray(models)) {
+  models = [];
+}
+const modelStr = models.length ? models.map(m => m.model_id?.split('/').pop()).join(' · ') : '';
+    document.getElementById('ie-manifest-models').textContent = modelStr || '';
+    
+    // Wire ENTER button
+    document.getElementById('btn-ie-manifest-enter').onclick = () => {
+      closeOverlay();
+      openIEChat(id);
+    };
+    
+    document.getElementById('ie-manifest-modal').classList.add('visible');
+    document.getElementById('cosm-overlay').classList.add('active');
+  });
+}
+
+async function openIEChat(id){
+  
+  const ie = await 
+  getImmutableEntity(id);
+  if(!ie) return;
+  
+  activeCharId = id;
+  activeIE = ie; // Store the IE data for chat context
+  
+  // Use display_name for the chat header
+  document.getElementById('chat-char-name').textContent = ie.display_name || 'Unnamed';
+  document.getElementById('chat-messages').innerHTML = '';
+  
+  // Load chat history -- IEs use the same history table, keyed by charId = ie.id
+  const history = await dbGetByIndex('history', 'charId', id);
+  history.forEach(h => appendChatMessage(h.role, h.content));
+  
+  const ieModels = ie.model_variants ? 
+  (typeof ie.model_variants === 'string' ? JSON.parse(ie.model_variants) : ie.model_variants) 
+  : [];
+if(ieModels.length > 0){
+  const chip = document.getElementById('ie-model-chip');
+  chip.style.display = 'block';
+  chip.textContent = ieModels[0].model_id?.split('/').pop() || 'model';
+  chip.dataset.models = JSON.stringify(ieModels);
+  chip.dataset.currentIndex = '0';
+} else {
+  document.getElementById('ie-model-chip').style.display = 'none';
+}
+  
+  // Hide edit button -- IE is immutable
+  document.getElementById('btn-chat-edit').style.display = 'none';
+  
+  // Persona -- IEs don't have player_role_id, use default
+  chatPersonaOverride = null;
+  updatePersonaPill();
+  
+  showPanel('view-chat');
+}
+
+function cycleIEModel(){
+  const chip = document.getElementById('ie-model-chip');
+  const models = JSON.parse(chip.dataset.models || '[]');
+  const currentIndex = parseInt(chip.dataset.currentIndex || '0');
+  const nextIndex = (currentIndex + 1) % models.length;
+  chip.textContent = models[nextIndex].model_id?.split('/').pop() || 'model';
+  chip.dataset.currentIndex = nextIndex.toString();
+}
+
+/* IE DEV DOOR */
+async function devCreateIEDraft(){
+  const name = prompt('IE Name:');
+  if(!name || !name.trim()) return;
+  const archetype = prompt('Archetype tag (e.g. VOID-WALKER):') || '';
+  const func = prompt('Existential function (one line):') || '';
+  
+  const entity = {
+    id: 'ie_' + Date.now(),
+    display_name: name.trim(),
+    archetype_tag: archetype.trim(),
+    existential_function: func.trim(),
+    system_prompt_core: 'You are ' + name.trim() + '. ' + (func.trim() || 'A presence in the room.'),
+    constraints: 'Will not soften. Will not perform.',
+    voice_limits: 'As required by truth. Minimal.',
+    memory_policy: 'stateless',
+    model_variants: '[]',
+    sigil_svg: '',
+    locked_at: null,
+    signature: null,
+    created_at: Date.now(),
+    updated_at: Date.now()
+  };
+  
+  await saveImmutableEntity(entity);
+  renderIEList(document.getElementById('ie-search-input')?.value || '');
+  showToast('◈ Draft forged -- ready for Lock Ceremony');
+}
+
+async function devQuickLock(id){
+  if(!confirm('Lock this entity? This simulates the full Lock Ceremony. Signature will be a dev placeholder.')) return;
+  
+  const entity = await getImmutableEntity(id);
+  if(!entity) return;
+  
+  const updated = {
+    ...entity,
+    locked_at: Date.now(),
+    signature: 'dev_signature_' + Date.now(),
+    // Generate a simple SVG sigil if none exists
+    sigil_svg: entity.sigil_svg || `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="15" fill="none" stroke="#c8a050" stroke-width="1.5"/><circle cx="18" cy="18" r="4" fill="#c8a050" opacity="0.6"/></svg>`,
+    updated_at: Date.now()
+  };
+  
+  await saveImmutableEntity(updated);
+  renderIEList(document.getElementById('ie-search-input')?.value || '');
+  showToast('◆ Entity Locked -- threshold crossed');
+}
 
 /* FOLDERS */
 const getFolders=()=>dbGetAll("cosm_folders");
@@ -2408,7 +2748,7 @@ function showPanel(id){
   const panels = [
   'view-soup', 'view-sanctuary', 'view-void', 'view-deep-soup', 'view-data',
   'view-lighthouse', 'view-forge', 'view-chat', 'view-memory', 
-  'view-persona', 'view-guardian'  // ← THIS MUST BE HERE
+  'view-persona', 'view-guardian', 'view-ie'
 ];
   panels.forEach(p=>{
     const el=document.getElementById(p);
@@ -2448,7 +2788,7 @@ function updateHeaderButtons(){
       '<button class="hdr-btn" id="hdr-persona">&#8278;</button>'+
       '<button class="hdr-btn" id="hdr-memory-vault" style="font-size:16px;">&#8277;</button>'+
       '<button class="hdr-btn" id="hdr-sanctuary-search">&#8982;</button>';
-    document.getElementById('hdr-immutable').onclick=function(){ showToast('⬡ Immutable -- arriving soon'); };
+    document.getElementById('hdr-immutable').onclick = function(){ openIEPage(); };
     document.getElementById('hdr-create').onclick=function(){ handleNewCharacter(); };
     document.getElementById('hdr-persona').onclick=function(){ openPersonaView(); };
     document.getElementById('hdr-memory-vault').onclick=function(){ openMemoryVaultGlobal(); };
@@ -2467,6 +2807,9 @@ async function goBack() {
     await renderTableView(); 
   } else { 
     showPanel('view-sanctuary'); 
+    // In goBack(), after showPanel:
+document.getElementById('btn-chat-edit').style.display = '';
+activeIE = null;
     renderSanctuaryView(); 
   }
 }
@@ -2956,25 +3299,50 @@ async function deleteCurrentDiscourse() {
 async function renderSanctuaryView(){
   const surface=document.getElementById('sanctuary-surface');surface.innerHTML='';
   const allC=await getCharacters();
-  const filtered=allC.filter(c=>!c.isDeleted&&((c.name||'').toLowerCase().includes(sanctuarySearchQuery)||(c.role||'').toLowerCase().includes(sanctuarySearchQuery)));
+  const allIE=await getImmutableEntities(); 
+
+  // Standardize both types to share the grid logic
+  const standardChars = allC.map(c => ({...c, _isIE: false}));
+  const immutableChars = allIE.map(ie => ({
+      ...ie, 
+      id: ie.id, 
+      name: ie.display_name, 
+      role: ie.existential_function || ie.archetype_tag,
+      updated_at: ie.updated_at || ie.created_at,
+      isDeleted: ie.is_deleted || false,
+      _isIE: true,
+      _locked: !!ie.signature
+  }));
+
+  const combined = [...standardChars, ...immutableChars];
+  const filtered = combined.filter(c => !c.isDeleted && ((c.name||'').toLowerCase().includes(sanctuarySearchQuery) || (c.role||'').toLowerCase().includes(sanctuarySearchQuery)));
 
   if(!filtered.length){surface.innerHTML='<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">No characters found</div></div>';return;}
 
-  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Characters';surface.appendChild(l);
+  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Characters & Entities';surface.appendChild(l);
   const g=document.createElement('div');g.className='cards-grid';
   for(const c of filtered){
-        const card=document.createElement('div');card.className='character-card card';
+    const card=document.createElement('div');card.className='character-card card';
     if(selectedItems.has(c.id)) card.classList.add('card-selected'); 
     
-    card.innerHTML=`<div><div class="char-card-name">${escHtml(c.name)}</div><div class="char-card-role">${escHtml(c.role||'No role assigned')}</div></div><div class="char-card-footer"><div class="char-card-meta">${new Date(c.updated_at).toLocaleDateString()}</div></div>`;
+    // Add a diamond marker if it's an immutable entity
+    const titleBadge = c._isIE ? `<span style="color:var(--accent);font-size:10px;margin-left:6px;">${c._locked ? '◆' : '◇'}</span>` : '';
+    
+    card.innerHTML=`<div><div class="char-card-name">${escHtml(c.name)}${titleBadge}</div><div class="char-card-role">${escHtml(c.role||'No role assigned')}</div></div><div class="char-card-footer"><div class="char-card-meta">${c._isIE ? 'IMMUTABLE' : 'STANDARD'} &middot; ${new Date(c.updated_at).toLocaleDateString()}</div></div>`;
     
     card.addEventListener('click',()=>{
       if(longPressConsumed){longPressConsumed=false;return;}
       if(selectMode){toggleSelectItem(c.id);return;} 
-      openChat(c.id);
+      
+      if(c._isIE) {
+         if(c._locked) openIEBottomSheet(c.id);
+         else { showToast('◈ Draft Entity. Go to ∞ Immutable page to forge.'); }
+      } else {
+         openChat(c.id);
+      }
     });
 
-card.addEventListener('mousedown',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}));
+    card.addEventListener('mousedown',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}));
     card.addEventListener('mouseup',()=>cancelLP(card));card.addEventListener('mouseleave',()=>cancelLP(card));
     card.addEventListener('touchstart',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}),{passive:true});
     card.addEventListener('touchend',()=>cancelLP(card));card.addEventListener('touchcancel',()=>cancelLP(card));
@@ -3036,11 +3404,15 @@ temperature:parseFloat(document.getElementById('forge-temp').value)
 
 function closeCharacterForge(){
   showPanel('view-sanctuary');
-  activeCharId=null;renderSanctuaryView();
+  document.getElementById('btn-chat-edit').style.display = '';activeCharId=null;renderSanctuaryView();
 }
 
 /* CHAT */
 async function openChat(id){
+// Check if tapping an IE
+  const ieCheck = await getImmutableEntity(id);
+  if(ieCheck && ieCheck.signature){ openIEBottomSheet(id); return; }
+  if(ieCheck && !ieCheck.signature){ showToast('◈ Draft -- go to ∞ page to forge'); return; }
   activeCharId=id;
   const c=await getCharacter(id);
   document.getElementById('chat-char-name').textContent=c.name;
@@ -3305,9 +3677,22 @@ async function callAIForChat(char, history){
   const roleId=chatPersonaOverride||char.player_role_id||null;
   const assignedRole=roleId?roles.find(r=>r.id===roleId):null;
 
-  const personaBlock=`\n\nPlayer is ${p.bio||'the user'}. ${p.personality?'Personality: '+p.personality+'.':''} ${assignedRole?'In this encounter they are: '+assignedRole.description+'.':''}`;
+  const personaBlock = activeIE ? '' : `\n\nPlayer is ${p.bio||'the user'}. ${p.personality?'Personality: '+p.personality+'.':''} ${assignedRole?'In this encounter they are: '+assignedRole.description+'.':''}`;
 
-  const sys=`You are ${char.name}. ${char.role}.
+  let sys;
+  if(activeIE && activeIE.id === char.id){
+    const ieModels = activeIE.model_variants ? 
+      (typeof activeIE.model_variants === 'string' ? JSON.parse(activeIE.model_variants) : activeIE.model_variants) 
+      : [];
+    const modelNote = ieModels.length ? '\n\nYou were battle-tested with: ' + ieModels.map(m => m.model_id?.split('/').pop()).join(', ') : '';
+    
+    sys = `${activeIE.system_prompt_core || 'You are ' + activeIE.display_name}
+Existential function: ${activeIE.existential_function || 'To be present.'}
+Constraints: ${activeIE.constraints || 'Will not soften. Will not perform.'}
+Voice: ${activeIE.voice_limits || 'As required by truth.'}${modelNote}
+${memoryBlock}`;
+  } else {
+    sys = `You are ${char.name}. ${char.role}.
 Personality: ${char.personality}.
 Backstory: ${char.backstory}.
 Lore: ${char.lorebook}.
@@ -3315,7 +3700,8 @@ Scenario: ${char.scenario}.
 Inclination: ${char.inclination}.
 Relationships: ${char.relationships}.
 Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
-
+  }
+  
   // 1. FORCE SORT BY TIME (IndexedDB gets messy)
   const sortedHistory = [...history].sort((a,b)=>a.created_at-b.created_at).slice(-12);
 
@@ -3332,7 +3718,11 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
        safeMsgs.push({ role, content });
     }
   }
-
+  
+const model = (activeIE && document.getElementById('ie-model-chip').style.display !== 'none') 
+  ? JSON.parse(document.getElementById('ie-model-chip').dataset.models || '[]')[parseInt(document.getElementById('ie-model-chip').dataset.currentIndex || '0')]?.model_id 
+  : (localStorage.getItem("nq_model") || "deepseek/deepseek-v4-flash");
+  
   // 3. Gemini demands the first non-system message be 'user'
   if (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
     safeMsgs.shift(); 
@@ -3716,8 +4106,8 @@ function closeOverlay(){
   document.getElementById("cosm-overlay").classList.remove("active");
   ['folder-modal','rename-modal','move-modal',
  'global-search-modal','capture-modal','discourse-modal','settings-modal',
- 'burn-disc-modal','role-modal','persona-select-modal'
-  ].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
+ 'burn-disc-modal','ie-manifest-modal','role-modal','persona-select-modal'
+].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
 }
 
 /* EDITOR */
@@ -3839,8 +4229,8 @@ async function exportMarkdown(){if(!currentDiscourseId)return;await saveCurrentD
 async function exportPDF(){if(!currentDiscourseId)return;await saveCurrentDiscourse(true);const d=await getDiscourse(currentDiscourseId);if(!d)return;const tile=await getMosaicTile(currentDiscourseId);let mh="";if(tile&&tile.anchors&&tile.anchors.length)mh=`<div style="border-left:3px solid #c8a050;padding:10px 16px;margin:16px 0;background:#f9f5ee;"><div style="font-size:11px;letter-spacing:2px;font-weight:900;margin-bottom:8px;color:#8a6e35;">◈ MOSAIC</div>${tile.anchors.map(a=>`<div style="margin:4px 0;">• ${escHtml(a)}</div>`).join('')}</div>`;const content=renderContent(d.raw_text||"");const fh=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(d.title||"Discourse")}</title><style>body{font-family:Georgia,serif;max-width:700px;margin:0 auto;padding:20px;color:#1a1a1a;line-height:1.8;}h1{font-size:26px;border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:6px;}.meta{font-size:12px;color:#888;margin-bottom:24px;}h2{font-size:20px;}h3{font-size:16px;color:#555;}pre{background:#f4f4f4;padding:14px;border-radius:6px;overflow-x:auto;}code{font-family:monospace;font-size:13px;}blockquote{border-left:3px solid #ccc;padding-left:14px;color:#666;font-style:italic;margin:12px 0;}</style></head><body><h1>${escHtml(d.title||"Untitled")}</h1><div class="meta">${new Date(d.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div>${mh}${content}</body></html>`;const iframe=document.createElement('iframe');iframe.style.cssText='position:absolute;width:0;height:0;border:none;';document.body.appendChild(iframe);const doc=iframe.contentWindow.document;doc.open();doc.write(fh);doc.close();setTimeout(()=>{iframe.contentWindow.focus();iframe.contentWindow.print();setTimeout(()=>document.body.removeChild(iframe),10000);},500);}
 async function exportDiscourseMarkdown(id){const d=await getDiscourse(id);if(!d)return;const tile=await getMosaicTile(id);let md=`# ${d.title}\n\n`;if(tile&&tile.anchors&&tile.anchors.length)md+=`> **Mosaic**\n${tile.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${(d.title||"discourse").replace(/[^a-z0-9]/gi,"_").toLowerCase()}.md`;a.click();URL.revokeObjectURL(url);showToast("Exported");}
 async function exportFolderContents(fId){const discs=(await dbGetByIndex("cosm_discourses","folder_id",fId)).filter(d=>!d.isDeleted);if(!discs.length){showToast("No discourses to export ◆");return;}let md=`# Folder Export\n\n`;for(const d of discs){const t=await getMosaicTile(d.id);md+=`## ${d.title}\n\n`;if(t&&t.anchors&&t.anchors.length)md+=`> **Mosaic**\n${t.anchors.map(a=>`> - ${a}`).join('\n')}\n\n`;md+=d.raw_text||" ";md+=`\n\n---\n\n`;}const blob=new Blob([md],{type:"text/markdown"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`folder_export_${new Date().toISOString().slice(0,10)}.md`;a.click();URL.revokeObjectURL(url);showToast(`Exported ${discs.length} discourse(s)`);}
-async function exportJSON(){const f=await dbGetAll("cosm_folders"),d=await dbGetAll("cosm_discourses"),m=await dbGetAll("cosm_mosaic_tiles"),b=await dbGetAll("cosm_backlinks"),c=await dbGetAll("characters"),h=await dbGetAll("history"),s=await dbGetAll("summaries");const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:f,cosm_discourses:d,cosm_mosaic_tiles:m,cosm_backlinks:b,characters:c,history:h,summaries:s};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`NQ_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);showToast("Backup exported ◆");}
-async function importJSON(event){const file=event.target.files[0];if(!file)return;if(!confirm("Import will merge with existing data. Continue?")){event.target.value='';return;}try{const text=await file.text();const payload=JSON.parse(text);const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store]))for(const item of payload[store])await dbPut(store,item);}mosaicCache={};if(currentMode==='soup')await renderTableView();else await renderSanctuaryView();showToast("Import complete ✓");}catch(err){console.error(err);showToast("Import failed");}event.target.value='';}
+async function exportJSON(){const f=await dbGetAll("cosm_folders"),d=await dbGetAll("cosm_discourses"),m=await dbGetAll("cosm_mosaic_tiles"),b=await dbGetAll("cosm_backlinks"),c=await dbGetAll("characters"),h=await dbGetAll("history"),s=await dbGetAll("summaries"),gl=await dbGetAll("guardian_logs"),gs=await dbGetAll("guardian_summaries"),ie=await dbGetAll("immutable_entities");const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:f,cosm_discourses:d,cosm_mosaic_tiles:m,cosm_backlinks:b,characters:c,history:h,summaries:s,guardian_logs:gl,guardian_summaries:gs,immutable_entities:ie};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`NQ_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);showToast("Backup exported ◆");}
+async function importJSON(event){const file=event.target.files[0];if(!file)return;if(!confirm("Import will merge with existing data. Continue?")){event.target.value='';return;}try{const text=await file.text();const payload=JSON.parse(text);const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries','guardian_logs','guardian_summaries','immutable_entities'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store]))for(const item of payload[store])await dbPut(store,item);}mosaicCache={};if(currentMode==='soup')await renderTableView();else await renderSanctuaryView();showToast("Import complete ✓");}catch(err){console.error(err);showToast("Import failed");}event.target.value='';}
 
 /* MOSAIC EXTRACT */
 async function extractMemory(){
@@ -3873,8 +4263,8 @@ function saveSupaFromDataPage(){
 }
 
 /* AKASHIC */
-async function backupToAkashic(){try{const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:await dbGetAll("cosm_folders"),cosm_discourses:await dbGetAll("cosm_discourses"),cosm_mosaic_tiles:await dbGetAll("cosm_mosaic_tiles"),cosm_backlinks:await dbGetAll("cosm_backlinks"),characters:await dbGetAll("characters"),history:await dbGetAll("history"),summaries:await dbGetAll("summaries")};const res=await fetch(`${AKASHIC_URL}/backup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:cosmUserId,data:JSON.stringify(payload)})});if(res.ok)showToast('Akashic Synced ◆');}catch(e){console.error(e);}}
-async function restoreFromAkashic(){if(!confirm("Pull from Akashic? This will overwrite local fragments."))return;try{const res=await fetch(`${AKASHIC_URL}/backup/latest?user_id=${cosmUserId}`);if(!res.ok)throw new Error('No backup');const payload=JSON.parse(await res.text());const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store])){const all=await dbGetAll(store);for(const item of all)await dbDelete(store,item.id);for(const item of payload[store])await dbPut(store,item);}}showToast('Sanctuary Restored ◆');setTimeout(()=>location.reload(),1200);}catch(e){console.error(e);showToast('Akashic offline ◆');}}
+async function backupToAkashic(){try{const payload={version:"NakedQuantum",exported_at:new Date().toISOString(),cosm_folders:await dbGetAll("cosm_folders"),cosm_discourses:await dbGetAll("cosm_discourses"),cosm_mosaic_tiles:await dbGetAll("cosm_mosaic_tiles"),cosm_backlinks:await dbGetAll("cosm_backlinks"),characters:await dbGetAll("characters"),history:await dbGetAll("history"),summaries:await dbGetAll("summaries"),guardian_logs:await dbGetAll("guardian_logs"),guardian_summaries:await dbGetAll("guardian_summaries"),immutable_entities:await dbGetAll("immutable_entities")};const res=await fetch(`${AKASHIC_URL}/backup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:cosmUserId,data:JSON.stringify(payload)})});if(res.ok)showToast('Akashic Synced ◆');}catch(e){console.error(e);}}
+async function restoreFromAkashic(){if(!confirm("Pull from Akashic? This will overwrite local fragments."))return;try{const res=await fetch(`${AKASHIC_URL}/backup/latest?user_id=${cosmUserId}`);if(!res.ok)throw new Error('No backup');const payload=JSON.parse(await res.text());const stores=['cosm_folders','cosm_discourses','cosm_mosaic_tiles','cosm_backlinks','characters','history','summaries','guardian_logs','guardian_summaries','immutable_entities'];for(const store of stores){if(payload[store]&&Array.isArray(payload[store])){const all=await dbGetAll(store);for(const item of all)await dbDelete(store,item.id);for(const item of payload[store])await dbPut(store,item);}}showToast('Sanctuary Restored ◆');setTimeout(()=>location.reload(),1200);}catch(e){console.error(e);showToast('Akashic offline ◆');}}
 
 /* LONG PRESS */
 function startLP(e,card,item){
@@ -3930,7 +4320,7 @@ async function handleSync() {
   try {
     const lastSync = parseInt(localStorage.getItem('nq_last_sync') || '0');
     let newLastSync = lastSync;
-    const stores = ['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks'];
+    const stores =['cosm_folders', 'cosm_discourses', 'characters', 'history', 'summaries', 'cosm_mosaic_tiles', 'cosm_backlinks', 'guardian_logs', 'guardian_summaries', 'immutable_entities'];
     
     // 1. PULL FROM CLOUD
     const pullRes = await fetch(`${supaUrl}/rest/v1/nq_sync?user_id=eq.${cosmUserId}&updated_at=gt.${lastSync}`, {
@@ -4254,8 +4644,14 @@ document.getElementById('btn-data-sync-page').addEventListener('click', ()=>hand
 });
   document.getElementById('btn-burn-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-burn-confirm').addEventListener('click',confirmBurnDisc);
-  document.getElementById('btn-settings-confirm').addEventListener('click', () => {
   
+  document.getElementById('btn-ie-back').addEventListener('click', ()=>{ showPanel('view-sanctuary'); renderSanctuaryView(); });
+document.getElementById('ie-search-input').addEventListener('input', e => renderIEList(e.target.value));
+document.getElementById('btn-ie-manifest-close').addEventListener('click', closeOverlay);
+
+document.getElementById('btn-ie-dev-forge').addEventListener('click', devCreateIEDraft);
+
+  document.getElementById('btn-settings-confirm').addEventListener('click', () => {
   localStorage.setItem('nq_api_key', document.getElementById('input-api-key').value.trim());
   localStorage.setItem('nq_base_url', document.getElementById('input-base-url').value.trim());
   localStorage.setItem('nq_model', document.getElementById('input-model').value); 
@@ -4304,25 +4700,20 @@ document.addEventListener('click', (e) => {
 document.getElementById('btn-summon-guardian').addEventListener('click', function(){ summonGuardian(); });
 document.getElementById('btn-guardian-send').addEventListener('click', handleGuardianOffer);
 document.getElementById('btn-guardian-log-close').addEventListener('click', closeGuardianLogDetail);
-
   document.getElementById('gold-line-trigger').addEventListener('touchstart', awakenGoldLine, {passive: true});
   // Awaken the thread on movement
   const soupView = document.getElementById('view-soup');
   soupView.addEventListener('scroll', awakenGoldLine, {passive: true});
   soupView.addEventListener('touchstart', awakenGoldLine, {passive: true});
-
 // Trigger Lineage from the gold line trigger you added
   const trigger = document.getElementById('gold-line-trigger');
   if (trigger) {
     trigger.addEventListener('click', openLineage);
   }
-
   // Close Lineage when tapping the background overlay
   document.getElementById('lineage-overlay').addEventListener('click', closeLineage);
-  
   // Initial draw
   renderGoldTicks();
-  
   // Final boot trigger with Gatekeeper
   async function bootApp() {
   const DEV_MODE = true;
