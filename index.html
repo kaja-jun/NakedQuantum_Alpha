@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.29.5</title>
+<title>NakedQuantum_dev v0.29.6</title>
 <style>
 :root {
   --bg: #000000;
@@ -27,6 +27,10 @@
 body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
 button { cursor: pointer; -webkit-appearance: none; appearance: none; touch-action: manipulation; }
 button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08s ease, opacity 0.08s ease; }
+button {
+  user-select: none;
+  -webkit-user-select: none;
+}
 
 #firefly-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
@@ -465,40 +469,41 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 
 .ie-deck-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--surface);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 10px 14px;
-  min-width: 160px;
-  max-width: 200px;
+  border: 1px solid #d4af37;
+  border-radius: 8px;
+  padding: 10px 8px;
+  min-width: 100px;
+  max-width: 110px;
   flex-shrink: 0;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 .ie-deck-card:active {
   background: var(--surface2);
-  border-color: var(--accent-dim);
+  border-color: var(--accent);
 }
 .ie-deck-card.draft {
-  border-color: var(--accent-dim);
-  opacity: 0.7;
+  border-color: var(--border);
+  opacity: 0.6;
 }
 .ie-deck-sigil {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 80px;
+  height: 80px;
   border: 1px solid var(--accent-dim);
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  overflow: hidden;
+  background: var(--bg);
 }
 .ie-deck-sigil svg {
-  width: 24px;
-  height: 24px;
+  width: 48px;
+  height: 48px;
 }
 .ie-deck-info {
   min-width: 0;
@@ -507,21 +512,20 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
   gap: 2px;
 }
 .ie-deck-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--accent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--text);
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
 }
 .ie-deck-archetype {
-  font-size: 9px;
+  font-size: 8px;
   letter-spacing: 1.5px;
   color: var(--accent-dim);
   text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
 }
 
 /* SANCTUARY DIVIDER */
@@ -768,6 +772,14 @@ select.cosm-input {
 .bar-pill.gold { border-color: var(--accent-dim); }
 .bar-pill.danger .bar-pill-label { color: #ff6060; }
 .bar-pill.danger { border-color: var(--danger); }
+
+.folder-card, .discourse-card, .character-card, .ie-row, .ie-deck-card,
+.hdr-btn, .bar-pill, .breadcrumb-btn, .tbtn, .btn-back-table,
+.nq-wordmark, .bottom-bar, .lighthouse-nav {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 
 </style>
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/transformers.min.js">
@@ -1030,14 +1042,17 @@ select.cosm-input {
               </div>
             </div>
           </div>
-      <div class="forge-input-group" id="forge-model-section" style="display:none;">
-      <span class="forge-label">Model Variants</span>
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="ie-model-input" class="cosm-input" placeholder="model/id" style="flex:1;">
-        <button id="ie-model-add-btn" class="tbtn gold" style="white-space:nowrap;">Add</button>
-      </div>
-      <div id="ie-model-list" style="display:flex; flex-wrap:wrap; gap:6px; padding-top:8px;"></div>
-    </div>
+  <div class="forge-input-group">
+  <span class="forge-label">Model Variants</span>
+  <div class="model-scroller" id="ie-model-list"></div>
+  <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+    <input type="text" id="ie-model-input" class="cosm-input" 
+      placeholder="paste model id..." 
+      style="flex:1;margin:0;">
+    <button id="ie-model-add-btn" class="tbtn gold">+ Add</button>
+  </div>
+</div>
+
         </div>
       </div>
     </div>
@@ -1053,7 +1068,14 @@ select.cosm-input {
       <div class="chat-char-name" id="chat-char-name">Character Name</div>
     </div>
 <div id="chat-persona-pill" style="font-size:9px;letter-spacing:1px;color:var(--accent-dim);border:1px solid var(--border);padding:3px 8px;border-radius:20px;cursor:pointer;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;">⚝ default</div>
-<div id="ie-model-chip" style="display:none;font-size:9px;letter-spacing:1px;color:var(--accent-dim);border:1px solid var(--border);padding:3px 8px;border-radius:20px;cursor:pointer;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;" onclick="cycleIEModel()"></div>
+<div id="ie-model-chip" 
+  onclick="cycleIEModel()"
+  style="display:none;font-size:9px;letter-spacing:1px;
+  color:var(--accent);border:1px solid var(--accent-dim);
+  padding:4px 10px;border-radius:20px;cursor:pointer;
+  white-space:nowrap;max-width:120px;overflow:hidden;
+  text-overflow:ellipsis;background:rgba(200,160,80,0.06);">
+</div>
     <button class="tbtn" id="btn-chat-edit">✎</button>
     <button class="tbtn" id="btn-chat-clear">✕</button>
   </div>
@@ -1352,13 +1374,22 @@ let currentIEModels = [];
 
 function renderIEModelList(){
   const list = document.getElementById('ie-model-list');
-  if (!list) return;
+  if(!list) return;
   list.innerHTML = '';
+  if(!currentIEModels.length){
+    list.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:4px 0;">No models -- add at least one</div>';
+    return;
+  }
   currentIEModels.forEach((modelId, index) => {
     const chip = document.createElement('div');
-    chip.className = 'model-chip';
-    chip.style.cssText = 'display:flex; align-items:center; gap:6px; padding:4px 10px;';
-    chip.innerHTML = `<span style="font-size:10px; color:var(--text);">${escHtml(modelId)}</span><button style="background:none;border:none;color:var(--danger);font-size:12px;cursor:pointer;padding:0;" onclick="deleteIEModel(${index})">✕</button>`;
+    chip.className = 'model-chip active';
+    chip.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+    chip.innerHTML = `
+      <span>${escHtml(modelId.split('/').pop())}</span>
+      <button onclick="deleteIEModel(${index})" 
+        style="background:none;border:none;color:var(--danger);
+        font-size:12px;cursor:pointer;padding:0;line-height:1;">✕</button>
+    `;
     list.appendChild(chip);
   });
 }
@@ -2044,6 +2075,7 @@ function openIEPage(){
   document.getElementById('ie-search-input').value = '';
   renderIEList();
 }
+
 function renderIEList(filterQuery = ''){
   const surface = document.getElementById('ie-list-surface');
   
@@ -2132,12 +2164,30 @@ function renderIEList(filterQuery = ''){
           row.querySelector('.ie-info').appendChild(lockBtn);
         }
         
-        row.addEventListener('click', () => {
-          if(isLocked) openIEBottomSheet(e.id);
-          else showToast('◈ This entity is still being forged');
-        });
-        
-        surface.appendChild(row);
+       row.addEventListener('click', () => {
+  if(isLocked) openIEBottomSheet(e.id);
+  // draft -- do nothing on row tap
+});
+
+// DEV ONLY -- remove before release
+let devLongPress = null;
+row.addEventListener('touchstart', () => {
+  devLongPress = setTimeout(() => devUnlockIE(e.id), 2000);
+}, {passive:true});
+row.addEventListener('touchend', () => clearTimeout(devLongPress));
+
+if(!isLocked){
+  const editBtn = document.createElement('button');
+  editBtn.style.cssText = 'background:none;border:1px solid var(--border);color:var(--muted);font-size:10px;padding:5px 10px;border-radius:8px;font-weight:700;white-space:nowrap;flex-shrink:0;margin-left:auto;';
+  editBtn.textContent = '✎ Edit';
+  editBtn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    openIEForge(e.id);
+  });
+  row.appendChild(editBtn);
+}
+surface.appendChild(row);
+
       } catch(innerErr) {
         renderErrors += 'Entity ' + idx + ' (' + (e.id||'no-id') + '): ' + innerErr.message + '\n';
       }
@@ -2154,6 +2204,7 @@ function renderIEList(filterQuery = ''){
     surface.innerHTML = '<div style="padding:20px;color:#ff6060;background:#1a0000;border:1px solid #ff6060;border-radius:12px;font-size:14px;white-space:pre-wrap;font-family:monospace;">DATABASE ERROR:\n' + err.message + '\n\n' + (err.stack || 'no stack') + '</div>';
   });
 }
+
 function openIEBottomSheet(id){
   getImmutableEntity(id).then(e => {
     if(!e) return;
@@ -2217,15 +2268,15 @@ async function openIEChat(id){
   const ieModels = ie.model_variants ? 
   (typeof ie.model_variants === 'string' ? JSON.parse(ie.model_variants) : ie.model_variants) 
   : [];
-if(ieModels.length > 0){
-  const chip = document.getElementById('ie-model-chip');
+const chip = document.getElementById('ie-model-chip');
+if(chip && currentIEModels.length > 0){
   chip.style.display = 'block';
-  chip.textContent = ieModels[0].model_id?.split('/').pop() || 'model';
-  chip.dataset.models = JSON.stringify(ieModels);
-  chip.dataset.currentIndex = '0';
-} else {
-  document.getElementById('ie-model-chip').style.display = 'none';
+  chip.dataset.idx = '0';
+  chip.textContent = `⟳ ${currentIEModels[0].split('/').pop()} 1/${currentIEModels.length}`;
+} else if(chip){
+  chip.style.display = 'none';
 }
+
   document.getElementById('chat-persona-pill').style.display = 'none';
   // Hide edit button -- IE is immutable
   document.getElementById('btn-chat-edit').style.display = 'none';
@@ -2238,14 +2289,14 @@ if(ieModels.length > 0){
 }
 
 function cycleIEModel(){
+  if(!currentIEModels.length) return;
   const chip = document.getElementById('ie-model-chip');
-  const models = JSON.parse(chip.dataset.models || '[]');
-  if (!models.length) return;
-  const currentIndex = parseInt(chip.dataset.currentIndex || '0');
-  const nextIndex = (currentIndex + 1) % models.length;
-  chip.textContent = models[nextIndex].model_id?.split('/').pop() || 'model';
-  chip.dataset.currentIndex = nextIndex.toString();
-  showToast('◈ ' + chip.textContent);
+  if(!chip) return;
+  let idx = parseInt(chip.dataset.idx || '0');
+  idx = (idx + 1) % currentIEModels.length;
+  chip.dataset.idx = idx;
+  chip.textContent = `⟳ ${currentIEModels[idx].split('/').pop()} ${idx+1}/${currentIEModels.length}`;
+  showToast('Model: ' + currentIEModels[idx]);
 }
 
 /* IE DEV DOOR */
@@ -2408,6 +2459,22 @@ if (!updated.model_variants || updated.model_variants === '[]' || (Array.isArray
   await saveImmutableEntity(updated);
   renderIEList(document.getElementById('ie-search-input')?.value || '');
   showToast('◆ Entity Locked -- threshold crossed');
+}
+
+async function devUnlockIE(id){
+  const entity = await dbGet('immutable_entities', id);
+  if(!entity) return;
+  
+  if(!entity.locked_at){
+    showToast('Already unlocked');
+    return;
+  }
+  
+  if(!confirm('DEV: Unlock this entity for editing?')) return;
+  
+  await dbPut('immutable_entities', {...entity, locked_at: null, signature: null});
+  renderIEList();
+  showToast('◈ Unlocked for editing');
 }
 
 /* FOLDERS */
