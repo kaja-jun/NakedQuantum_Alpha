@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.29.9</title>
+<title>NakedQuantum_dev v0.30</title>
 <style>
 :root {
   --bg: #000000;
@@ -1308,6 +1308,10 @@ select.cosm-input {
   <div class="modal-buttons" style="margin-top:14px;">
     <button class="modal-btn-cancel" id="btn-ie-manifest-close">Close</button>
     <button class="modal-btn-confirm" id="btn-ie-manifest-enter" style="letter-spacing:2px;">ENTER</button>
+    <button onclick="deleteImmutableEntity(document.getElementById('ie-manifest-modal').dataset.ieId)" 
+  style="background:none;border:1px solid var(--danger);color:#ff6060;font-size:11px;font-weight:700;padding:10px 18px;border-radius:10px;margin-top:8px;width:100%;letter-spacing:1px;">
+  ✕ Dissolve Entity
+</button>
   </div>
 </div>
 
@@ -2245,7 +2249,8 @@ const modelStr = models.length ? models.map(m => m.model_id?.split('/').pop()).j
       closeOverlay();
       openIEChat(id);
     };
-    
+        document.getElementById('ie-manifest-modal').dataset.ieId = id;
+
     document.getElementById('ie-manifest-modal').classList.add('visible');
     document.getElementById('cosm-overlay').classList.add('active');
   });
@@ -2304,6 +2309,13 @@ function cycleIEModel(){
   chip.dataset.idx = idx;
   chip.textContent = `⟳ ${currentIEModels[idx].split('/').pop()} ${idx+1}/${currentIEModels.length}`;
   showToast('Model: ' + currentIEModels[idx]);
+}
+
+async function deleteImmutableEntity(id) {
+  if(!confirm('Delete this Immutable Entity? This cannot be undone.')) return;
+  await dbDelete('immutable_entities', id);
+  showToast('Entity dissolved ◆');
+  renderIEList();
 }
 
 /* IE DEV DOOR */
@@ -4012,8 +4024,8 @@ async function handleChatSend(){
   // THE FIX: Generating a highly unique string ID to prevent sync collisions
   const userMsgId = 'h_' + crypto.randomUUID();
   await dbPut('history', { id: userMsgId, charId: activeCharId, role: 'user', content: text, created_at: now });
-
-  const char = await getCharacter(activeCharId);
+    const char = activeIE ? activeIE : await getCharacter(activeCharId);
+  if(!char){ isSending=false; return; }
   let history = await dbGetByIndex('history','charId',activeCharId);
   history = history.map(h=>({...h})).sort((a,b)=>a.created_at-b.created_at);
 
@@ -4295,10 +4307,10 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     }
   }
   
-const model = (activeIE && document.getElementById('ie-model-chip').style.display !== 'none') 
-  ? JSON.parse(document.getElementById('ie-model-chip').dataset.models || '[]')[parseInt(document.getElementById('ie-model-chip').dataset.currentIndex || '0')]?.model_id 
+const chip = document.getElementById('ie-model-chip');
+const model = (activeIE && chip && chip.style.display !== 'none')
+  ? (JSON.parse(chip.dataset.models || '[]')[parseInt(chip.dataset.idx || '0')]?.model_id || localStorage.getItem("nq_model") || "deepseek/deepseek-v4-flash")
   : (localStorage.getItem("nq_model") || "deepseek/deepseek-v4-flash");
-  
   // 3. Gemini demands the first non-system message be 'user'
   if (safeMsgs.length > 0 && safeMsgs[0].role !== 'user') {
     safeMsgs.shift(); 
