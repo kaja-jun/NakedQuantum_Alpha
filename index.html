@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.29</title>
+<title>NakedQuantum_dev v0.29.5</title>
 <style>
 :root {
   --bg: #000000;
@@ -450,6 +450,101 @@ button:active { opacity: 0.7; transform: scale(0.97); transition: transform 0.08
 .ie-manifest-text {
   font-family: var(--font-serif); font-size: 14px; color: var(--text);
   line-height: 1.7; opacity: 0.85;
+}
+/* IE DECK STRIP */
+.ie-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+}
+.ie-strip::-webkit-scrollbar { display: none; }
+
+.ie-deck-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 160px;
+  max-width: 200px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ie-deck-card:active {
+  background: var(--surface2);
+  border-color: var(--accent-dim);
+}
+.ie-deck-card.draft {
+  border-color: var(--accent-dim);
+  opacity: 0.7;
+}
+.ie-deck-sigil {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.ie-deck-sigil svg {
+  width: 24px;
+  height: 24px;
+}
+.ie-deck-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ie-deck-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ie-deck-archetype {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* SANCTUARY DIVIDER */
+.sanctuary-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  margin-top: 4px;
+}
+.sanctuary-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.sanctuary-divider-label {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  opacity: 0.45;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .forge-view { background: var(--bg); overflow: hidden; }
@@ -928,7 +1023,6 @@ select.cosm-input {
     <option value="">Default (global persona only)</option>
   </select>
 </div>
-
               <span class="forge-label">Quantum Temperature</span>
               <div class="range-wrap">
                 <input type="range" class="range-input" id="forge-temp" min="0" max="2" step="0.1" value="1">
@@ -936,6 +1030,14 @@ select.cosm-input {
               </div>
             </div>
           </div>
+      <div class="forge-input-group" id="forge-model-section" style="display:none;">
+      <span class="forge-label">Model Variants</span>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="ie-model-input" class="cosm-input" placeholder="model/id" style="flex:1;">
+        <button id="ie-model-add-btn" class="tbtn gold" style="white-space:nowrap;">Add</button>
+      </div>
+      <div id="ie-model-list" style="display:flex; flex-wrap:wrap; gap:6px; padding-top:8px;"></div>
+    </div>
         </div>
       </div>
     </div>
@@ -1115,6 +1217,22 @@ select.cosm-input {
     <button class="modal-btn-confirm" id="btn-settings-confirm">Solidify</button>
   </div>
 </div>
+
+<div class="cosm-modal" id="create-modal">
+  <div class="modal-title">⌗ Create</div>
+  <div class="management-actions">
+    <button class="management-btn" id="btn-create-character">
+      <span>◈</span> Create Character
+    </button>
+    <button class="management-btn" id="btn-create-persona">
+      <span>⁂</span> Persona
+    </button>
+  </div>
+  <div class="modal-buttons">
+    <button class="modal-btn-cancel" id="btn-create-cancel">Cancel</button>
+  </div>
+</div>
+
 <div class="cosm-modal" id="burn-disc-modal">
   <div class="modal-title">⌬ Engram</div>
   <div style="font-size:11px;color:var(--muted);">Character</div>
@@ -1224,6 +1342,32 @@ function getGlobalPersona(){
 function saveGlobalPersona(bio,personality){
   localStorage.setItem('nq_global_persona',JSON.stringify({bio,personality}));
 }
+
+function openCreateModal(){
+  document.getElementById('create-modal').classList.add('visible');
+  document.getElementById('cosm-overlay').classList.add('active');
+}
+
+let currentIEModels = [];
+
+function renderIEModelList(){
+  const list = document.getElementById('ie-model-list');
+  if (!list) return;
+  list.innerHTML = '';
+  currentIEModels.forEach((modelId, index) => {
+    const chip = document.createElement('div');
+    chip.className = 'model-chip';
+    chip.style.cssText = 'display:flex; align-items:center; gap:6px; padding:4px 10px;';
+    chip.innerHTML = `<span style="font-size:10px; color:var(--text);">${escHtml(modelId)}</span><button style="background:none;border:none;color:var(--danger);font-size:12px;cursor:pointer;padding:0;" onclick="deleteIEModel(${index})">✕</button>`;
+    list.appendChild(chip);
+  });
+}
+
+function deleteIEModel(index){
+  currentIEModels.splice(index, 1);
+  renderIEModelList();
+}
+
 function getPersonaRoles(){
   return JSON.parse(localStorage.getItem('nq_persona_roles')||'[]');
 }
@@ -1900,80 +2044,116 @@ function openIEPage(){
   document.getElementById('ie-search-input').value = '';
   renderIEList();
 }
-
 function renderIEList(filterQuery = ''){
   const surface = document.getElementById('ie-list-surface');
-  surface.innerHTML = '';
+  
+  // Show debug info on screen
+  let debugInfo = '';
+  
+  surface.innerHTML = '<div style="padding:20px;color:var(--muted);">Loading entities...</div>';
   
   getImmutableEntities().then(entities => {
-    const q = filterQuery.toLowerCase();
-    const filtered = entities.filter(e => 
-      (!e.is_deleted) && 
-      (!q || (e.display_name||'').toLowerCase().includes(q) 
-      || (e.archetype_tag||'').toLowerCase().includes(q)
-      || (e.existential_function||'').toLowerCase().includes(q))
-    );
+    debugInfo += 'Loaded: ' + (entities?.length || 0) + ' entities\n';
     
-    if(!filtered.length && !q){
+    if (!entities || !entities.length) {
       surface.innerHTML = `
         <div class="ie-empty">
           No immutable entities yet.<br>
-          These are forged over time --<br>
-          conversations that become rooms.<br>
-          When a character is ready,<br>
-          the Lock Ceremony makes it permanent.
-        </div>`;
-      return;
-    }
-    if(!filtered.length && q){
-      surface.innerHTML = '<div class="table-empty"><div class="table-empty-glyph">∞</div><div class="table-empty-text">No match found</div></div>';
+          These are forged over time.
+        </div>
+        <div style="margin-top:20px;padding:12px;background:#1a1a00;border:1px solid #333;border-radius:8px;font-size:10px;color:#888;white-space:pre-wrap;font-family:monospace;">DEBUG:\n${debugInfo}entities array is empty or null</div>`;
       return;
     }
     
-    filtered.forEach(e => {
-      const isLocked = !!e.signature;
-      const date = new Date(e.locked_at || e.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-      
-      // THE FIX: Safely handle auto-parsed arrays from the DB worker
-      let models =[];
-      if (Array.isArray(e.model_variants)) models = e.model_variants;
-      else if (typeof e.model_variants === 'string') { try { models = JSON.parse(e.model_variants); } catch(err){} }
-      
-      const modelStr = models.length ? models.map(m => m.model_id?.split('/').pop()).join(' · ') : '';
-      
-      const row = document.createElement('div');
-      row.className = 'ie-row';
-      row.innerHTML = `
-        <div class="ie-sigil${isLocked ? '' : ' draft'}">${e.sigil_svg || '◈'}</div>
-        <div class="ie-info">
-          <div class="ie-name">${escHtml(e.display_name||'Unnamed')}${isLocked ? '<span class="diamond">◆</span>' : ''}</div>
-          ${e.archetype_tag ? `<div class="ie-archetype">${escHtml(e.archetype_tag)}</div>` : ''}
-          ${e.existential_function ? `<div class="ie-function">${escHtml(e.existential_function)}</div>` : ''}
-          <div class="ie-meta">${isLocked ? 'locked' : 'draft'} · ${date}${modelStr ? ' · ' + modelStr : ''}</div>
-        </div>
-      `;
-      if(!isLocked){
-        const lockBtn = document.createElement('button');
-        lockBtn.style.cssText = 'margin-top:6px;background:none;border:1px solid var(--accent-dim);color:var(--accent);font-size:9px;padding:3px 10px;border-radius:6px;font-weight:700;letter-spacing:1px;';
-        lockBtn.textContent = '◆ Lock';
-        lockBtn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          devQuickLock(e.id);
-        });
-        row.querySelector('.ie-info').appendChild(lockBtn);
-      }
-      row.addEventListener('click', () => {
-        if(isLocked){
-          openIEBottomSheet(e.id);
-        } else {
-          showToast('◈ This entity is still being forged');
-        }
+    const q = (filterQuery || '').trim().toLowerCase();
+    
+    let filtered;
+    try {
+      filtered = entities.filter(e => {
+        if (!e) return false;
+        if (e.is_deleted || e.isDeleted) return false;
+        if (!q) return true;
+        return (e.display_name||'').toLowerCase().includes(q) 
+          || (e.archetype_tag||'').toLowerCase().includes(q)
+          || (e.existential_function||'').toLowerCase().includes(q);
       });
-      surface.appendChild(row);
+      debugInfo += 'After filter: ' + filtered.length + ' entities\n';
+    } catch(filterErr) {
+      surface.innerHTML = '<div style="padding:20px;color:#ff6060;background:#1a0000;border:1px solid #ff6060;border-radius:12px;font-size:14px;white-space:pre-wrap;font-family:monospace;">FILTER ERROR:\n' + filterErr.message + '\n\n' + filterErr.stack + '</div>';
+      return;
+    }
+    
+    if(!filtered.length){
+      surface.innerHTML = `
+        <div class="ie-empty">
+          ${q ? 'No entities match search' : 'No immutable entities yet.'}
+        </div>
+        <div style="margin-top:20px;padding:12px;background:#1a1a00;border:1px solid #333;border-radius:8px;font-size:10px;color:#888;white-space:pre-wrap;font-family:monospace;">DEBUG:\n${debugInfo}First entity sample: ${entities[0] ? entities[0].id + ' / ' + entities[0].display_name : 'none'}</div>`;
+      return;
+    }
+    
+    surface.innerHTML = '';
+    
+    let renderErrors = '';
+    
+    filtered.forEach((e, idx) => {
+      try {
+        const isLocked = !!e.signature;
+        const date = new Date(e.locked_at || e.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+        
+        let models = [];
+        if (Array.isArray(e.model_variants)) {
+          models = e.model_variants;
+        } else if (typeof e.model_variants === 'string') {
+          try { models = JSON.parse(e.model_variants); } catch(err) { models = []; }
+        }
+        const modelStr = models.length ? models.map(m => m.model_id?.split('/').pop()).filter(Boolean).join(' · ') : '';
+        
+        const row = document.createElement('div');
+        row.className = 'ie-row';
+        row.innerHTML = `
+          <div class="ie-sigil${isLocked ? '' : ' draft'}">${e.sigil_svg || '◈'}</div>
+          <div class="ie-info">
+            <div class="ie-name">${escHtml(e.display_name||'Unnamed')}${isLocked ? '<span class="diamond">◆</span>' : ''}</div>
+            ${e.archetype_tag ? '<div class="ie-archetype">' + escHtml(e.archetype_tag) + '</div>' : ''}
+            ${e.existential_function ? '<div class="ie-function">' + escHtml(e.existential_function) + '</div>' : ''}
+            <div class="ie-meta">${isLocked ? 'locked' : 'draft'} · ${date}${modelStr ? ' · ' + modelStr : ''}</div>
+          </div>
+        `;
+        
+        if(!isLocked){
+          const lockBtn = document.createElement('button');
+          lockBtn.textContent = '◆ Lock';
+          lockBtn.style.cssText = 'margin-top:6px;background:none;border:1px solid var(--accent-dim);color:var(--accent);font-size:9px;padding:3px 10px;border-radius:6px;font-weight:700;letter-spacing:1px;';
+          lockBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            devQuickLock(e.id);
+          });
+          row.querySelector('.ie-info').appendChild(lockBtn);
+        }
+        
+        row.addEventListener('click', () => {
+          if(isLocked) openIEBottomSheet(e.id);
+          else showToast('◈ This entity is still being forged');
+        });
+        
+        surface.appendChild(row);
+      } catch(innerErr) {
+        renderErrors += 'Entity ' + idx + ' (' + (e.id||'no-id') + '): ' + innerErr.message + '\n';
+      }
     });
+    
+    if (renderErrors) {
+      const errDiv = document.createElement('div');
+      errDiv.style.cssText = 'margin-top:20px;padding:12px;background:#1a0000;border:1px solid #ff6060;border-radius:8px;font-size:10px;color:#ff6060;white-space:pre-wrap;font-family:monospace;';
+      errDiv.textContent = 'RENDER ERRORS:\n' + renderErrors;
+      surface.appendChild(errDiv);
+    }
+    
+  }).catch(err => {
+    surface.innerHTML = '<div style="padding:20px;color:#ff6060;background:#1a0000;border:1px solid #ff6060;border-radius:12px;font-size:14px;white-space:pre-wrap;font-family:monospace;">DATABASE ERROR:\n' + err.message + '\n\n' + (err.stack || 'no stack') + '</div>';
   });
 }
-
 function openIEBottomSheet(id){
   getImmutableEntity(id).then(e => {
     if(!e) return;
@@ -2046,7 +2226,7 @@ if(ieModels.length > 0){
 } else {
   document.getElementById('ie-model-chip').style.display = 'none';
 }
-  
+  document.getElementById('chat-persona-pill').style.display = 'none';
   // Hide edit button -- IE is immutable
   document.getElementById('btn-chat-edit').style.display = 'none';
   
@@ -2060,39 +2240,148 @@ if(ieModels.length > 0){
 function cycleIEModel(){
   const chip = document.getElementById('ie-model-chip');
   const models = JSON.parse(chip.dataset.models || '[]');
+  if (!models.length) return;
   const currentIndex = parseInt(chip.dataset.currentIndex || '0');
   const nextIndex = (currentIndex + 1) % models.length;
   chip.textContent = models[nextIndex].model_id?.split('/').pop() || 'model';
   chip.dataset.currentIndex = nextIndex.toString();
+  showToast('◈ ' + chip.textContent);
 }
 
 /* IE DEV DOOR */
 async function devCreateIEDraft(){
-  const name = prompt('IE Name:');
-  if(!name || !name.trim()) return;
-  const archetype = prompt('Archetype tag (e.g. VOID-WALKER):') || '';
-  const func = prompt('Existential function (one line):') || '';
+  // No prompt -- just create with a default name
+  const defaultName = 'Entity ' + new Date().toLocaleDateString('en-US', {month:'short', day:'numeric'});
   
   const entity = {
     id: 'ie_' + Date.now(),
-    display_name: name.trim(),
-    archetype_tag: archetype.trim(),
-    existential_function: func.trim(),
-    system_prompt_core: 'You are ' + name.trim() + '. ' + (func.trim() || 'A presence in the room.'),
+    display_name: defaultName,
+    archetype_tag: '',
+    existential_function: '',
+    system_prompt_core: 'You are ' + defaultName + '.',
     constraints: 'Will not soften. Will not perform.',
-    voice_limits: 'As required by truth. Minimal.',
+    voice_limits: 'As required by truth.',
     memory_policy: 'stateless',
-    model_variants: '[]',
+    model_variants: JSON.stringify([
+      {model_id: 'google/gemini-2.5-flash-lite'},
+      {model_id: 'deepseek/deepseek-v4-flash'},
+      {model_id: 'google/gemini-3-flash-preview'}
+    ]),
     sigil_svg: '',
     locked_at: null,
     signature: null,
+    is_hidden: 0,
     created_at: Date.now(),
     updated_at: Date.now()
   };
   
   await saveImmutableEntity(entity);
+  openIEForge(entity.id);
+}
+
+async function openIEForge(id){
+  const ie = await getImmutableEntity(id);
+  if(!ie) {
+    showToast('Entity not found');
+    return;
+  }
+
+  activeCharId = null;
+  
+  // Map IE fields to forge field IDs
+  document.getElementById('forge-name').value = ie.display_name || '';
+  document.getElementById('forge-role').value = ie.archetype_tag || '';
+  document.getElementById('forge-backstory').value = ie.system_prompt_core || '';
+  document.getElementById('forge-personality').value = ie.voice_limits || '';
+  document.getElementById('forge-lorebook').value = ie.constraints || '';
+  document.getElementById('forge-scenario').value = ie.existential_function || '';
+  document.getElementById('forge-inclination').value = ie.memory_policy || 'stateless';
+  document.getElementById('forge-relationships').value = '';
+  document.getElementById('forge-pc-info').value = '';
+
+  // Reset temperature slider to normal
+  const tempInput = document.getElementById('forge-temp');
+  tempInput.type = 'range';
+  tempInput.min = '0';
+  tempInput.max = '2';
+  tempInput.step = '0.1';
+  tempInput.value = '1';
+  document.getElementById('forge-temp-val').textContent = '1.0';
+
+  // Parse model variants into currentIEModels array
+  currentIEModels = [];
+  if (ie.model_variants) {
+    let models = ie.model_variants;
+    if(typeof models === 'string'){ try{ models = JSON.parse(models); }catch(e){ models = []; } }
+    if (Array.isArray(models)) {
+      currentIEModels = models.map(m => m.model_id).filter(Boolean);
+    }
+  }
+  renderIEModelList();
+  // Store IE id for save
+  document.getElementById('forge-container').dataset.ieId = id;
+  document.getElementById('forge-container').dataset.isIE = 'true';
+
+  // Hide persona role selector
+  const personaRoleParent = document.getElementById('forge-persona-role').parentElement;
+  if (personaRoleParent) personaRoleParent.style.display = 'none';
+
+  // Show model section, hide temperature section
+  const tempSection = document.getElementById('forge-temp').closest('.forge-input-group');
+  const modelSection = document.getElementById('forge-model-section');
+  if (tempSection) tempSection.style.display = 'none';
+  if (modelSection) modelSection.style.display = 'flex';
+
+  // Change labels
+  const sectionTitles = document.querySelectorAll('.forge-section-title');
+  if (sectionTitles.length >= 4) {
+    sectionTitles[0].textContent = 'Identity & Origin';
+    sectionTitles[1].textContent = 'Voice & Constraint';
+    sectionTitles[2].textContent = 'Memory & Models';
+    sectionTitles[3].textContent = 'Lock Status';
+  }
+
+  // Force all sections open
+  document.querySelectorAll('.forge-section').forEach(s => s.classList.add('open'));
+
+  showPanel('view-forge');
+  showToast('◈ Fill the forge');
+}
+
+function closeIEForge(){
+  document.getElementById('forge-container').dataset.ieId = '';
+  document.getElementById('forge-container').dataset.isIE = 'false';
+  
+  // Reset persona role visibility
+  const personaRoleParent = document.getElementById('forge-persona-role').parentElement;
+  if (personaRoleParent) personaRoleParent.style.display = '';
+  
+  // Reset temperature to visible, model section hidden
+  const tempSection = document.getElementById('forge-temp').closest('.forge-input-group');
+  const modelSection = document.getElementById('forge-model-section');
+  if (tempSection) tempSection.style.display = '';
+  if (modelSection) modelSection.style.display = 'none';
+  
+  // Reset temperature to range
+  const tempInput = document.getElementById('forge-temp');
+  tempInput.type = 'range';
+  tempInput.min = '0';
+  tempInput.max = '2';
+  tempInput.step = '0.1';
+  tempInput.value = '1';
+  document.getElementById('forge-temp-val').textContent = '1.0';
+  
+  // Reset labels
+  const sectionTitles = document.querySelectorAll('.forge-section-title');
+  if (sectionTitles.length >= 4) {
+    sectionTitles[0].textContent = 'Identity & Backstory';
+    sectionTitles[1].textContent = 'Personality & Core';
+    sectionTitles[2].textContent = 'Lore & World';
+    sectionTitles[3].textContent = 'Dynamics & Presence';
+  }
+  
+  showPanel('view-ie');
   renderIEList(document.getElementById('ie-search-input')?.value || '');
-  showToast('◈ Draft forged -- ready for Lock Ceremony');
 }
 
 async function devQuickLock(id){
@@ -2109,7 +2398,13 @@ async function devQuickLock(id){
     sigil_svg: entity.sigil_svg || `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="15" fill="none" stroke="#c8a050" stroke-width="1.5"/><circle cx="18" cy="18" r="4" fill="#c8a050" opacity="0.6"/></svg>`,
     updated_at: Date.now()
   };
-  
+  // Before saveImmutableEntity(updated), add:
+if (!updated.model_variants || updated.model_variants === '[]' || (Array.isArray(updated.model_variants) && updated.model_variants.length === 0)) {
+  updated.model_variants = JSON.stringify([
+    {model_id: 'google/gemini-2.5-flash-lite'},
+    {model_id: 'deepseek/deepseek-v4-flash'}
+  ]);
+}
   await saveImmutableEntity(updated);
   renderIEList(document.getElementById('ie-search-input')?.value || '');
   showToast('◆ Entity Locked -- threshold crossed');
@@ -2784,15 +3079,15 @@ function updateHeaderButtons(){
   } else {
     c.innerHTML=
       '<button class="hdr-btn" id="hdr-immutable" style="font-size:16px;">&#8734;</button>'+
-      '<button class="hdr-btn" id="hdr-create" style="font-size:18px;">+</button>'+
-      '<button class="hdr-btn" id="hdr-persona">&#8278;</button>'+
+      '<button class="hdr-btn" id="hdr-create" style="font-size:18px;">&#8967;</button>'+   // ⌗
+      '<button class="hdr-btn" id="hdr-settings">&#11041;</button>'+                       // ⬡
       '<button class="hdr-btn" id="hdr-memory-vault" style="font-size:16px;">&#8277;</button>'+
       '<button class="hdr-btn" id="hdr-sanctuary-search">&#8982;</button>';
     document.getElementById('hdr-immutable').onclick = function(){ openIEPage(); };
-    document.getElementById('hdr-create').onclick=function(){ handleNewCharacter(); };
-    document.getElementById('hdr-persona').onclick=function(){ openPersonaView(); };
-    document.getElementById('hdr-memory-vault').onclick=function(){ openMemoryVaultGlobal(); };
-    document.getElementById('hdr-sanctuary-search').onclick=function(){ openSanctuarySearch(); };
+    document.getElementById('hdr-create').onclick = function(){ openCreateModal(); };
+    document.getElementById('hdr-settings').onclick = function(){ openSettingsModal(); };
+    document.getElementById('hdr-memory-vault').onclick = function(){ openMemoryVaultGlobal(); };
+    document.getElementById('hdr-sanctuary-search').onclick = function(){ openSanctuarySearch(); };
   }
   }
 
@@ -3297,59 +3592,127 @@ async function deleteCurrentDiscourse() {
 
 /* SANCTUARY */
 async function renderSanctuaryView(){
-  const surface=document.getElementById('sanctuary-surface');surface.innerHTML='';
-  const allC=await getCharacters();
-  const allIE=await getImmutableEntities(); 
+  const surface = document.getElementById('sanctuary-surface');
+  surface.innerHTML = '';
+  
+  const allC = await getCharacters();
+  const allIE = await getImmutableEntities(); 
 
-  // Standardize both types to share the grid logic
-  const standardChars = allC.map(c => ({...c, _isIE: false}));
-  const immutableChars = allIE.map(ie => ({
-      ...ie, 
-      id: ie.id, 
-      name: ie.display_name, 
-      role: ie.existential_function || ie.archetype_tag,
-      updated_at: ie.updated_at || ie.created_at,
-      isDeleted: ie.is_deleted || false,
-      _isIE: true,
-      _locked: !!ie.signature
-  }));
-
-  const combined = [...standardChars, ...immutableChars];
-  const filtered = combined.filter(c => !c.isDeleted && ((c.name||'').toLowerCase().includes(sanctuarySearchQuery) || (c.role||'').toLowerCase().includes(sanctuarySearchQuery)));
-
-  if(!filtered.length){surface.innerHTML='<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">No characters found</div></div>';return;}
-
-  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Characters & Entities';surface.appendChild(l);
-  const g=document.createElement('div');g.className='cards-grid';
-  for(const c of filtered){
-    const card=document.createElement('div');card.className='character-card card';
-    if(selectedItems.has(c.id)) card.classList.add('card-selected'); 
-    
-    // Add a diamond marker if it's an immutable entity
-    const titleBadge = c._isIE ? `<span style="color:var(--accent);font-size:10px;margin-left:6px;">${c._locked ? '◆' : '◇'}</span>` : '';
-    
-    card.innerHTML=`<div><div class="char-card-name">${escHtml(c.name)}${titleBadge}</div><div class="char-card-role">${escHtml(c.role||'No role assigned')}</div></div><div class="char-card-footer"><div class="char-card-meta">${c._isIE ? 'IMMUTABLE' : 'STANDARD'} &middot; ${new Date(c.updated_at).toLocaleDateString()}</div></div>`;
-    
-    card.addEventListener('click',()=>{
-      if(longPressConsumed){longPressConsumed=false;return;}
-      if(selectMode){toggleSelectItem(c.id);return;} 
-      
-      if(c._isIE) {
-         if(c._locked) openIEBottomSheet(c.id);
-         else { showToast('◈ Draft Entity. Go to ∞ Immutable page to forge.'); }
-      } else {
-         openChat(c.id);
-      }
-    });
-
-    card.addEventListener('mousedown',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}));
-    card.addEventListener('mouseup',()=>cancelLP(card));card.addEventListener('mouseleave',()=>cancelLP(card));
-    card.addEventListener('touchstart',e=>startLP(e,card,{type:'character',id:c.id,name:c.name,data:c}),{passive:true});
-    card.addEventListener('touchend',()=>cancelLP(card));card.addEventListener('touchcancel',()=>cancelLP(card));
-    card.addEventListener('touchmove',e=>handleTM(e,card),{passive:true});
-    g.appendChild(card);
+  // Separate IEs from standard characters
+  const standardChars = allC.filter(c => !c.isDeleted);
+  const immutableEntities = allIE.filter(ie => !ie.is_deleted);
+  
+  const q = sanctuarySearchQuery.toLowerCase();
+  const filteredIEs = q 
+    ? immutableEntities.filter(ie => 
+        (ie.display_name||'').toLowerCase().includes(q) || 
+        (ie.archetype_tag||'').toLowerCase().includes(q) ||
+        (ie.existential_function||'').toLowerCase().includes(q)
+      )
+    : immutableEntities;
+  
+  const filteredChars = q
+    ? standardChars.filter(c => 
+        (c.name||'').toLowerCase().includes(q) || 
+        (c.role||'').toLowerCase().includes(q)
+      )
+    : standardChars;
+  
+  const hasIEs = filteredIEs.length > 0;
+  const hasChars = filteredChars.length > 0;
+  
+  if (!hasIEs && !hasChars) {
+    surface.innerHTML = '<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">No characters found</div></div>';
+    return;
   }
-  surface.appendChild(g);
+
+  // --- IE DECK STRIP (top, horizontal scroll) ---
+  if (hasIEs) {
+    const strip = document.createElement('div');
+    strip.className = 'ie-strip';
+    
+    for (const ie of filteredIEs) {
+      const isLocked = !!ie.signature;
+      const card = document.createElement('div');
+      card.className = 'ie-deck-card' + (isLocked ? '' : ' draft');
+      
+      card.innerHTML = `
+        <div class="ie-deck-sigil">${ie.sigil_svg || '◈'}</div>
+        <div class="ie-deck-info">
+          <div class="ie-deck-name">${escHtml(ie.display_name || 'Unnamed')}${isLocked ? '' : ' ◇'}</div>
+          ${ie.archetype_tag ? `<div class="ie-deck-archetype">${escHtml(ie.archetype_tag)}</div>` : ''}
+        </div>
+      `;
+      
+      card.addEventListener('click', () => {
+        if (isLocked) {
+          openIEBottomSheet(ie.id);
+        } else {
+          showToast('◈ Draft Entity. Go to ∞ Immutable page to forge.');
+        }
+      });
+      
+      strip.appendChild(card);
+    }
+    
+    surface.appendChild(strip);
+  }
+
+  // --- DIVIDER ---
+  if (hasIEs && hasChars) {
+    const divider = document.createElement('div');
+    divider.className = 'sanctuary-divider';
+    divider.innerHTML = `
+      <div class="sanctuary-divider-line"></div>
+      <span class="sanctuary-divider-label">Characters</span>
+      <div class="sanctuary-divider-line"></div>
+    `;
+    surface.appendChild(divider);
+  }
+
+  // --- CHARACTER GRID (below) ---
+  if (hasChars) {
+    const l = document.createElement('div');
+    l.className = 'cards-section-label';
+    l.textContent = hasIEs ? '' : 'Characters & Entities';
+    surface.appendChild(l);
+    
+    const g = document.createElement('div');
+    g.className = 'cards-grid';
+    
+    for (const c of filteredChars) {
+      const card = document.createElement('div');
+      card.className = 'character-card card';
+      if (selectedItems.has(c.id)) card.classList.add('card-selected'); 
+      
+      card.innerHTML = `
+        <div>
+          <div class="char-card-name">${escHtml(c.name)}</div>
+          <div class="char-card-role">${escHtml(c.role || 'No role assigned')}</div>
+        </div>
+        <div class="char-card-footer">
+          <div class="char-card-meta">STANDARD · ${new Date(c.updated_at).toLocaleDateString()}</div>
+        </div>
+      `;
+      
+      card.addEventListener('click', () => {
+        if (longPressConsumed) { longPressConsumed = false; return; }
+        if (selectMode) { toggleSelectItem(c.id); return; } 
+        openChat(c.id);
+      });
+
+      card.addEventListener('mousedown', e => startLP(e, card, {type:'character', id:c.id, name:c.name, data:c}));
+      card.addEventListener('mouseup', () => cancelLP(card));
+      card.addEventListener('mouseleave', () => cancelLP(card));
+      card.addEventListener('touchstart', e => startLP(e, card, {type:'character', id:c.id, name:c.name, data:c}), {passive: true});
+      card.addEventListener('touchend', () => cancelLP(card));
+      card.addEventListener('touchcancel', () => cancelLP(card));
+      card.addEventListener('touchmove', e => handleTM(e, card), {passive: true});
+      
+      g.appendChild(card);
+    }
+    surface.appendChild(g);
+  }
 }
 
 async function handleNewCharacter(){const c=await createCharacter();openCharacterForge(c.id);}
@@ -3381,28 +3744,66 @@ roles.forEach(r=>{
 }
 
 async function saveCharacterForge(){
-  const data={
-    name:document.getElementById('forge-name').value.trim()||"Unnamed Soul",
-    role:document.getElementById('forge-role').value.trim(),
-    backstory:document.getElementById('forge-backstory').value,
-    personality:document.getElementById('forge-personality').value,
-    lorebook:document.getElementById('forge-lorebook').value,
-    scenario:document.getElementById('forge-scenario').value,
-    inclination:document.getElementById('forge-inclination').value,
-    relationships:document.getElementById('forge-relationships').value,
-    pc_info:document.getElementById('forge-pc-info').value,
+  const isIE = document.getElementById('forge-container').dataset.isIE === 'true';
+  const ieId = document.getElementById('forge-container').dataset.ieId;
 
-player_role_id: document.getElementById('forge-persona-role').value||null,
+  if(isIE && ieId){
+    const ie = await getImmutableEntity(ieId);
+    if(!ie) {
+      showToast('Entity not found');
+      return;
+    }
 
-temperature:parseFloat(document.getElementById('forge-temp').value)
+    // Parse model variants from the model textarea
+    const modelVariants = currentIEModels.length > 0 
+      ? currentIEModels.map(line => ({model_id: line}))
+      : [{model_id: 'google/gemini-2.5-flash-lite'}, {model_id: 'deepseek/deepseek-v4-flash'}];
+
+    const updated = {
+      ...ie,
+      display_name: document.getElementById('forge-name').value.trim() || ie.display_name,
+      archetype_tag: document.getElementById('forge-role').value.trim(),
+      system_prompt_core: document.getElementById('forge-backstory').value,
+      voice_limits: document.getElementById('forge-personality').value,
+      constraints: document.getElementById('forge-lorebook').value,
+      existential_function: document.getElementById('forge-scenario').value,
+      memory_policy: document.getElementById('forge-inclination').value || 'stateless',
+      model_variants: JSON.stringify(modelVariants),
+      updated_at: Date.now()
+    };
+
+    await saveImmutableEntity(updated);
+    showToast('◆ IE Draft updated');
+    closeIEForge();
+    return;
+  }
+
+  // --- Regular character save (only runs if NOT IE mode) ---
+  const data = {
+    name: document.getElementById('forge-name').value.trim() || "Unnamed Soul",
+    role: document.getElementById('forge-role').value.trim(),
+    backstory: document.getElementById('forge-backstory').value,
+    personality: document.getElementById('forge-personality').value,
+    lorebook: document.getElementById('forge-lorebook').value,
+    scenario: document.getElementById('forge-scenario').value,
+    inclination: document.getElementById('forge-inclination').value,
+    relationships: document.getElementById('forge-relationships').value,
+    pc_info: document.getElementById('forge-pc-info').value,
+    player_role_id: document.getElementById('forge-persona-role').value || null,
+    temperature: parseFloat(document.getElementById('forge-temp').value)
   };
-  if(activeCharId)await updateCharacter(activeCharId,data);
+  
+  if(activeCharId) await updateCharacter(activeCharId, data);
   else await createCharacter(data);
   showToast("Soul Anchored ◆");
   closeCharacterForge();
 }
 
 function closeCharacterForge(){
+  if(document.getElementById('forge-container').dataset.isIE === 'true'){
+    closeIEForge();
+    return;
+  }
   showPanel('view-sanctuary');
   document.getElementById('btn-chat-edit').style.display = '';activeCharId=null;renderSanctuaryView();
 }
@@ -3740,7 +4141,7 @@ const model = (activeIE && document.getElementById('ie-model-chip').style.displa
         "X-Title": "NakedQuantum"
       },
       body:JSON.stringify({
-        model:localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",
+        model:model,
         messages:msgs,
         temperature:char.temperature||1.0
       })
@@ -4106,7 +4507,7 @@ function closeOverlay(){
   document.getElementById("cosm-overlay").classList.remove("active");
   ['folder-modal','rename-modal','move-modal',
  'global-search-modal','capture-modal','discourse-modal','settings-modal',
- 'burn-disc-modal','ie-manifest-modal','role-modal','persona-select-modal'
+ 'burn-disc-modal','ie-manifest-modal','role-modal','persona-select-modal','create-modal'
 ].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove("visible");});
 }
 
@@ -4644,7 +5045,25 @@ document.getElementById('btn-data-sync-page').addEventListener('click', ()=>hand
 });
   document.getElementById('btn-burn-cancel').addEventListener('click',closeOverlay);
   document.getElementById('btn-burn-confirm').addEventListener('click',confirmBurnDisc);
-  
+  document.getElementById('btn-create-character').addEventListener('click', ()=>{
+  closeOverlay();
+  handleNewCharacter();
+});
+document.getElementById('btn-create-persona').addEventListener('click', ()=>{
+  closeOverlay();
+  openPersonaView();
+});
+document.getElementById('btn-create-cancel').addEventListener('click', closeOverlay);
+
+document.getElementById('ie-model-add-btn').addEventListener('click', ()=>{
+  const input = document.getElementById('ie-model-input');
+  const val = input.value.trim();
+  if(val && !currentIEModels.includes(val)){
+    currentIEModels.push(val);
+    input.value = '';
+    renderIEModelList();
+  }
+});
   document.getElementById('btn-ie-back').addEventListener('click', ()=>{ showPanel('view-sanctuary'); renderSanctuaryView(); });
 document.getElementById('ie-search-input').addEventListener('input', e => renderIEList(e.target.value));
 document.getElementById('btn-ie-manifest-close').addEventListener('click', closeOverlay);
