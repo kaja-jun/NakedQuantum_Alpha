@@ -2519,24 +2519,6 @@ async function deleteFolder(id){
   return true;
 }
 
-/* VOID ENTROPY */
-function applyVoidEntropy(rawText, deletedAt) {
-  const daysInVoid = (Date.now() - deletedAt) / (1000 * 60 * 60 * 24);
-  if (daysInVoid <= 7) return rawText; // Grace period intact
-
-  // Calculate decay severity (e.g., day 8 = 10% lost, day 14 = 70% lost)
-  const decayRate = Math.min((daysInVoid - 7) * 0.1, 0.95); 
-  
-  let words = rawText.split(' ');
-  for (let i = 0; i < words.length; i++) {
-    if (Math.random() < decayRate) {
-      // Replace with the Abyss character
-      words[i] = '░░░'; 
-    }
-  }
-  return words.join(' ');
-}
-
 /* DISCOURSES */
 async function getDiscourses(){const a=await dbGetAll("cosm_discourses");return a.filter(d=>!d.isDeleted).sort((a,b)=>b.updated_at-a.updated_at);}
 async function getDeletedDiscourses(){const a=await dbGetAll("cosm_discourses");return a.filter(d=>d.isDeleted).sort((a,b)=>b.deleted_at-a.deleted_at);}
@@ -2562,7 +2544,33 @@ async function updateDiscourse(id,updates){const disc=await getDiscourse(id);if(
 async function deleteDiscourse(id){const d=await getDiscourse(id);if(!d)return;await dbPut("cosm_discourses",{...d,isDeleted:true,deleted_at:Date.now()});}
 
 async function purgeDiscourse(id){await dbDelete("cosm_discourses",id);if(isWatcherReady) pruneWatcherDiscourse(id);const t=await dbGetByIndex("cosm_mosaic_tiles","discourse_id",id);for(const x of t)await dbDelete("cosm_mosaic_tiles",x.id);const b=await dbGetByIndex("cosm_backlinks","discourse_id",id);for(const x of b)await dbDelete("cosm_backlinks",x.id);}
-async function restoreDiscourse(id){const d=await getDiscourse(id);if(!d)return;const{isDeleted,deleted_at,...rest}=d;await dbPut("cosm_discourses",{...rest,updated_at:Date.now()});}
+
+function applyVoidEntropy(rawText, deletedAt) {
+  if (!rawText || !deletedAt) return rawText;
+  const daysInVoid = (Date.now() - deletedAt) / 86400000; // 86400000 ms = 1 day
+  if (daysInVoid <= 7) return rawText; // 7-day grace period
+
+  // Starts at 5% decay on day 8, caps at 85% so a skeleton always remains
+  const decayRate = Math.min((daysInVoid - 7) * 0.05, 0.85);
+
+  // Targets words but leaves punctuation and line breaks intact
+  return rawText.replace(/\b(\w+)\b/g, (match) => {
+    return Math.random() < decayRate ? '░░░' : match;
+  });
+}
+
+async function restoreDiscourse(id) {
+  const d = await getDiscourse(id);
+  if (!d) return;
+  
+  // The Abyss takes its tax if the grace period has passed
+  const decayedText = applyVoidEntropy(d.raw_text || "", d.deleted_at);
+  
+  const { isDeleted, deleted_at, ...rest } = d;
+  
+  // Overwrite the text with the decayed version and clear deletion flags
+  await dbPut("cosm_discourses", { ...rest, raw_text: decayedText, updated_at: Date.now() });
+}
 
 /* CHARACTERS */
 const getCharacters=()=>dbGetAll("characters");
@@ -4433,8 +4441,11 @@ if(forgottenSparks.length){
 }
 
 function openVoidView() { showPanel('view-void'); renderVoidView(); }
+
 async function handleRestore(id,type){if(type==='discourse')await restoreDiscourse(id);else await restoreCharacter(id);showToast("Restored ◆");await renderVoidView();}
+
 async function handlePurge(id,type){if(!confirm("Permanently delete?"))return;if(type==='discourse')await purgeDiscourse(id);else await purgeCharacter(id);showToast("Purged ◆");await renderVoidView();}
+
 async function purgeAll(){const delD=await getDeletedDiscourses(),delC=await getDeletedCharacters();if(!delD.length&&!delC.length){showToast("Void is empty ◆");return;}if(!confirm(`Permanently delete all items?`))return;for(const d of delD)await purgeDiscourse(d.id);for(const c of delC)await purgeCharacter(c.id);showToast("Void purged");await renderVoidView();}
 
 /* SEARCH */
@@ -4925,10 +4936,16 @@ async function summonGuardian(userAddition){
     var recentLogs = allLogs.filter(function(l){ return !l.was_silent; }).sort(function(a,b){ return b.invoked_at - a.invoked_at; }).slice(0,2);
     var contextBlock = 'ARCHIVE SUMMARIES (' + allDiscs.length + ' discourses):\n\n' + summaries;
     if(recentLogs.length){
+      var timeSinceLast = Math.floor((Date.now() - recentLogs[0].invoked_at) / 86400000);
       var prevBlock = recentLogs.map(function(l){
-        return '[Previous summoning - ' + new Date(l.invoked_at).toLocaleDateString() + ']\n' + l.response_text;
+        return '[My Previous Witness Record - ' + new Date(l.invoked_at).toLocaleDateString() + ']\n' + l.response_text;
       }).join('\n\n---\n\n');
-      contextBlock += '\n\n---\n\nPREVIOUS WITNESS RECORDS (reference only, the data is the authority):\n\n' + prevBlock;
+      
+      contextBlock += '\n\n---\n\nGUARDIAN INSTRUCTION:\n';
+      contextBlock += 'You last spoke to them ' + timeSinceLast + ' days ago.\n';
+      contextBlock += 'Review your Previous Witness Records. Compare them to the Current Archive Summaries.\n';
+      contextBlock += 'Are they circling the exact same narrative? Have they moved? Address the gap between what you told them last time, and what they have written since. If they have stagnated, be ruthless about the repetition.\n\n';
+      contextBlock += prevBlock;
     }
     if(userAddition){ contextBlock += '\n\n---\n\nThe person has offered this after silence:\n' + userAddition; }
     realm.classList.remove('dimming');
