@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.30.2</title>
+<title>NakedQuantum_dev v0.30.3</title>
 <style>
 :root {
   --bg: #000000;
@@ -1892,7 +1892,15 @@ async function processWatcherQueue() {
     const item = watcherQueue.shift();
     try { await embedDiscourseMain(item.id, item.title, item.body, item.itemType, item.lastSeenActive); }
     catch (e) { console.warn('Watcher Embed Error', e); }
-    await new Promise(r => setTimeout(r, 250));
+    
+    // Yield entirely to the UI so typing never stutters.
+    await new Promise(r => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => setTimeout(r, 100), { timeout: 2000 });
+      } else {
+        setTimeout(r, 400);
+      }
+    });
   }
   updateWatcherStatusUI();
   refreshWatcherDot(); // NEW
@@ -2653,13 +2661,13 @@ async function restoreDiscourse(id) {
   const d = await getDiscourse(id);
   if (!d) return;
   
-  // The Abyss takes its tax if the grace period has passed
+// The Abyss takes its tax on the body AND the title
   const decayedText = applyVoidEntropy(d.raw_text || "", d.deleted_at);
+  const decayedTitle = applyVoidEntropy(d.title || "Untitled", d.deleted_at);
   
   const { isDeleted, deleted_at, ...rest } = d;
   
-  // Overwrite the text with the decayed version and clear deletion flags
-  await dbPut("cosm_discourses", { ...rest, raw_text: decayedText, updated_at: Date.now() });
+  await dbPut("cosm_discourses", { ...rest, title: decayedTitle, raw_text: decayedText, updated_at: Date.now() });
 }
 
 /* CHARACTERS */
@@ -5026,8 +5034,13 @@ async function handleSync() {
       if (row.deleted_at) {
          await dbDelete(row.store, row.id);
       } else if (row.data_enc) {
-         const obj = await decFromCloud(row.data_enc);
-         await dbPut(row.store, obj);
+         try {
+           const obj = await decFromCloud(row.data_enc);
+           await dbPut(row.store, obj);
+         } catch (decErr) {
+           console.warn("◈ Voided a corrupted cloud engram:", row.id);
+           // It skips the corrupted row but keeps the sync alive.
+         }
       }
     }
 
