@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.29.6</title>
+<title>NakedQuantum_dev v0.29.7</title>
 <style>
 :root {
   --bg: #000000;
@@ -2517,6 +2517,24 @@ async function deleteFolder(id){
   if(!confirm(`Burn "${name}"${summary} to the Void?`))return false;
   await deleteFolderRecursive(id);
   return true;
+}
+
+/* VOID ENTROPY */
+function applyVoidEntropy(rawText, deletedAt) {
+  const daysInVoid = (Date.now() - deletedAt) / (1000 * 60 * 60 * 24);
+  if (daysInVoid <= 7) return rawText; // Grace period intact
+
+  // Calculate decay severity (e.g., day 8 = 10% lost, day 14 = 70% lost)
+  const decayRate = Math.min((daysInVoid - 7) * 0.1, 0.95); 
+  
+  let words = rawText.split(' ');
+  for (let i = 0; i < words.length; i++) {
+    if (Math.random() < decayRate) {
+      // Replace with the Abyss character
+      words[i] = '░░░'; 
+    }
+  }
+  return words.join(' ');
 }
 
 /* DISCOURSES */
