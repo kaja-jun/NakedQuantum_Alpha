@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.29.7</title>
+<title>NakedQuantum_dev v0.29.9</title>
 <style>
 :root {
   --bg: #000000;
@@ -791,6 +791,12 @@ select.cosm-input {
   <div style="color:#a0d8a0;letter-spacing:5px;font-size:11px;font-weight:900;text-transform:uppercase;">NakedQuantum</div>
   <button id="btn-manual-unlock" style="background:var(--surface2);border:1px solid var(--accent-dim);color:var(--accent);padding:12px 24px;border-radius:20px;font-weight:900;font-size:11px;letter-spacing:1px;text-transform:uppercase;display:none;">Tap to Unlock</button>
   <input type="password" id="fallback-key-input" placeholder="Paste Sovereign Key..." class="cosm-input" style="display:none; width:250px; text-align:center;">
+  <!-- ADD: status text line -->
+<div id="lock-status" style="font-size:12px;color:var(--muted);text-align:center;margin:8px 0;letter-spacing:1px;min-height:18px;"></div>
+
+<!-- ADD: cooldown retry button (hidden by default) -->
+<button id="btn-faceid-retry" style="display:none;background:none;border:1px solid var(--accent-dim);color:var(--accent);font-size:11px;letter-spacing:1px;font-weight:700;padding:8px 18px;border-radius:8px;margin-top:8px;">◈ Try Face ID</button>
+
   <button id="btn-fallback-unlock" style="display:none; background:var(--accent); color:#000; font-weight:900; padding:12px 24px; border-radius:20px; border:none; text-transform:uppercase; font-size:11px; letter-spacing:1px;">Force Unlock</button>
 </div>
 
@@ -862,7 +868,10 @@ select.cosm-input {
     <p style="font-size:10px;color:var(--muted);line-height:1.4;margin:4px 0 8px;">If you lose this key and your device, your words belong to the Abyss forever.</p>
     <button onclick="showSovereignKey()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);width:100%;height:40px;border-radius:8px;font-weight:900;font-size:11px;">Reveal & Copy Key</button>
     <input type="text" id="export-key-display" class="cosm-input" readonly style="display:none;margin-top:8px;text-align:center;font-family:monospace;font-size:11px;color:#a0d8a0;border-color:#a0d8a0;">
-
+<button onclick="resetWebAuthnRegistration()" 
+  style="background:none;border:1px solid var(--danger);color:#ff6060;font-size:11px;font-weight:700;padding:8px 14px;border-radius:8px;letter-spacing:1px;margin-top:12px;">
+  ◈ Reset Face ID Registration
+</button>
     <div class="cards-section-label" style="margin-top:24px;">Akashic Records</div>
     <p style="font-size:10px;color:var(--muted);line-height:1.4;margin:4px 0 8px;">Cold backup. Disaster recovery. This overwrites local fragments.</p>
     <div style="display:flex;gap:8px;">
@@ -1406,7 +1415,6 @@ function savePersonaRoles(roles){
   localStorage.setItem('nq_persona_roles',JSON.stringify(roles));
 }
 
-
 /* FIREFLY */
 class FF{constructor(){this.canvas=document.getElementById('firefly-canvas');this.ctx=this.canvas.getContext('2d');this.p=[];this.d=15;this.r();window.addEventListener('resize',()=>this.r());this.a();}r(){this.canvas.width=innerWidth;this.canvas.height=innerHeight;}sd(l){this.d=Math.min(60,15+Math.floor(l/200));}a(){this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);while(this.p.length<this.d)this.p.push({x:Math.random()*this.canvas.width,y:Math.random()*this.canvas.height,s:Math.random()*1.5+.2,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,a:Math.random()*.4+.1,p:Math.random()*.01+.002});if(this.p.length>this.d)this.p.splice(this.d);this.p.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.a+=p.p;if(p.a>.6||p.a<.1)p.p*=-1;if(p.x<0)p.x=this.canvas.width;if(p.x>this.canvas.width)p.x=0;if(p.y<0)p.y=this.canvas.height;if(p.y>this.canvas.height)p.y=0;this.ctx.beginPath();this.ctx.arc(p.x,p.y,p.s,0,Math.PI*2);this.ctx.fillStyle=`rgba(200,160,80,${p.a})`;this.ctx.fill();});requestAnimationFrame(()=>this.a());}}
 const firefly=new FF();
@@ -1641,7 +1649,7 @@ function initWorker(){
 const NQ_DEV_MODE = true;
 
 const W_MODEL_ID = 'Xenova/bge-base-en-v1.5';
-const W_SIMILARITY_THRESHOLD = NQ_DEV_MODE ? 0.50 : 0.82;
+const W_SIMILARITY_THRESHOLD = NQ_DEV_MODE ? 0.50 : 0.73;
 const W_DECAY_ACTIVE_DAYS = 25;
 const W_LINK_EXPIRY_DAYS = 60;
 const W_SILENT_PERIOD_HOURS = NQ_DEV_MODE ? 0 : 48;
@@ -2111,7 +2119,8 @@ function renderIEList(filterQuery = ''){
       });
       debugInfo += 'After filter: ' + filtered.length + ' entities\n';
     } catch(filterErr) {
-      surface.innerHTML = '<div style="padding:20px;color:#ff6060;background:#1a0000;border:1px solid #ff6060;border-radius:12px;font-size:14px;white-space:pre-wrap;font-family:monospace;">FILTER ERROR:\n' + filterErr.message + '\n\n' + filterErr.stack + '</div>';
+      surface.innerHTML = '<div style="padding:20px;color:#ff6060;background:#1a0000;border:1px solid #ff6060;border-radius:12px;font-size:14px;">FILTER ERROR -- check console.</div>';
+console.error('IE filter error:', filterErr);
       return;
     }
     
@@ -2120,7 +2129,7 @@ function renderIEList(filterQuery = ''){
         <div class="ie-empty">
           ${q ? 'No entities match search' : 'No immutable entities yet.'}
         </div>
-        <div style="margin-top:20px;padding:12px;background:#1a1a00;border:1px solid #333;border-radius:8px;font-size:10px;color:#888;white-space:pre-wrap;font-family:monospace;">DEBUG:\n${debugInfo}First entity sample: ${entities[0] ? entities[0].id + ' / ' + entities[0].display_name : 'none'}</div>`;
+       <div class="ie-empty">${q ? 'No entities match search' : 'No immutable entities yet.'}</div>`;
       return;
     }
     
@@ -2189,19 +2198,13 @@ if(!isLocked){
 surface.appendChild(row);
 
       } catch(innerErr) {
-        renderErrors += 'Entity ' + idx + ' (' + (e.id||'no-id') + '): ' + innerErr.message + '\n';
+        console.error('IE render error entity', idx, e.id, innerErr);
       }
     });
     
-    if (renderErrors) {
-      const errDiv = document.createElement('div');
-      errDiv.style.cssText = 'margin-top:20px;padding:12px;background:#1a0000;border:1px solid #ff6060;border-radius:8px;font-size:10px;color:#ff6060;white-space:pre-wrap;font-family:monospace;';
-      errDiv.textContent = 'RENDER ERRORS:\n' + renderErrors;
-      surface.appendChild(errDiv);
-    }
-    
   }).catch(err => {
-    surface.innerHTML = '<div style="padding:20px;color:#ff6060;background:#1a0000;border:1px solid #ff6060;border-radius:12px;font-size:14px;white-space:pre-wrap;font-family:monospace;">DATABASE ERROR:\n' + err.message + '\n\n' + (err.stack || 'no stack') + '</div>';
+    surface.innerHTML = '<div style="padding:20px;color:#ff6060;background:#1a0000;border:1px solid #ff6060;border-radius:12px;font-size:14px;">DATABASE ERROR -- check console.</div>';
+console.error('IE list DB error:', err);
   });
 }
 
@@ -2589,7 +2592,14 @@ async function deleteMosaicTile(dId){const t=await getMosaicTile(dId);if(t)await
 async function getBacklink(dId){const l=await dbGetByIndex("cosm_backlinks","discourse_id",dId);return l.length>0?l[0]:null;}
 
 /* PRF UNLOCK */
-const PRF_SALT = new TextEncoder().encode('NakedQuantum_v1_salt').buffer;
+function getPRFSalt() {
+  const stored = localStorage.getItem('nq_prf_salt');
+  if (stored) return b64ToBuf(stored);
+  // First time: generate and persist
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  localStorage.setItem('nq_prf_salt', bufToB64(salt.buffer));
+  return salt.buffer;
+}
 const WA_CRED_KEY = 'nq_prf_cred_id';
 
 function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
@@ -2602,7 +2612,7 @@ async function unlockWithPRF(){
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         userVerification: 'required',
-        extensions: { prf: { eval: { first: PRF_SALT } } },
+        extensions: { prf: { eval: { first: getPRFSalt() } } },
         timeout: 60000
       }
     };
@@ -2613,7 +2623,7 @@ async function unlockWithPRF(){
 
    if(ext.prf?.results?.first){
       const keyBytes = new Uint8Array(ext.prf.results.first);
-      window.sessionSovereignKey = keyBytes; // Capture in RAM for backup
+      setSovereignKey(keyBytes); // Capture in RAM for backup
       await setEncryptionKey(keyBytes);
       showToast('Sovereign key active ◆');
       return true;
@@ -2628,7 +2638,7 @@ async function unlockWithPRF(){
             user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'kaja', displayName: 'Kaja' },
             pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
             authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required' },
-            extensions: { prf: { eval: { first: PRF_SALT } } },
+            extensions: { prf: { eval: { first: getPRFSalt() } } },
             timeout: 60000
           }
         });
@@ -2644,11 +2654,22 @@ async function unlockWithPRF(){
   return false;
 }
 
-window.sessionSovereignKey = null;
+// ADD this new function:
+async function resetWebAuthnRegistration() {
+  if (!confirm('This will clear your Face ID registration. You will need to re-register on next unlock. Continue?')) return;
+  localStorage.removeItem('nq_prf_cred_id');
+  localStorage.removeItem('nq_prf_salt'); // if you implemented Fix 2
+  showToast('◈ Face ID cleared -- will re-register on next unlock');
+}
+
+let _sovereignKeyBytes = null;
+function getSovereignKey() { return _sovereignKeyBytes; }
+function setSovereignKey(bytes) { _sovereignKeyBytes = bytes; }
+function clearSovereignKey() { _sovereignKeyBytes = null; }
 
 function showSovereignKey() {
-  if(!window.sessionSovereignKey) { showToast("Unlock Abyss first ◆"); return; }
-  const b64 = bufToB64(window.sessionSovereignKey);
+  if(!getSovereignKey()) { showToast("Unlock Abyss first ◆"); return; }
+const b64 = bufToB64(getSovereignKey());
   const displayInput = document.getElementById('export-key-display');
   displayInput.value = b64;
   displayInput.style.display = 'block';
@@ -2683,7 +2704,7 @@ async function unlockWithFallbackKey() {
     
     if(keyBytes.length !== 32) throw new Error("Incorrect key length");
     
-    window.sessionSovereignKey = keyBytes;
+    setSovereignKey(keyBytes);
     await setEncryptionKey(keyBytes);
     
     document.getElementById('lock-screen').style.display = 'none';
@@ -2692,6 +2713,48 @@ async function unlockWithFallbackKey() {
   } catch(e) {
     showError("⚠ INVALID KEY");
   }
+}
+
+// ─── SECURE KEY STORAGE ─────────────────────────────────────────────────────
+
+async function storeSecureKey(storageKey, value) {
+  if (!getSovereignKey() || !value) {
+    // No sovereign key yet (DEV_MODE) -- fall back to plaintext
+    localStorage.setItem(storageKey, value);
+    return;
+  }
+  const cryptoKey = await getCloudCryptoKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    new TextEncoder().encode(value)
+  );
+  localStorage.setItem(
+    storageKey + '_enc',
+    JSON.stringify({ iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) })
+  );
+  localStorage.removeItem(storageKey); // remove any old plaintext
+}
+
+async function readSecureKey(storageKey) {
+  const enc = localStorage.getItem(storageKey + '_enc');
+  if (enc && getSovereignKey()) {
+    try {
+      const { iv, ct } = JSON.parse(enc);
+      const cryptoKey = await getCloudCryptoKey();
+      const dec = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: new Uint8Array(iv) },
+        cryptoKey,
+        new Uint8Array(ct)
+      );
+      return new TextDecoder().decode(dec);
+    } catch (e) {
+      console.error('Key decrypt failed:', e);
+    }
+  }
+  // Fallback: plaintext (DEV_MODE or pre-migration)
+  return localStorage.getItem(storageKey) || '';
 }
 
 /* INIT */
@@ -2714,7 +2777,7 @@ async function init(){
   showPanel('view-soup'); 
   await renderTableView();
   
-  document.getElementById('input-api-key').value=localStorage.getItem('nq_api_key')||'';
+  document.getElementById('input-api-key').value=await readSecureKey('nq_api_key')||'';
   document.getElementById('input-model').value=localStorage.getItem('nq_model')||'deepseek/deepseek-v4-flash';
   initWatcher();
 }
@@ -3950,7 +4013,7 @@ async function handleChatSend(){
 async function presSummariseForGuardian(discourseId){
   const d=await getDiscourse(discourseId);
   if(!d||!d.raw_text||d.raw_text.trim().length<30)return;
-  const key=localStorage.getItem('nq_api_key')||'';
+  const key=await readSecureKey('nq_api_key')||'';
   if(!key)return;
   const existing=await dbGet('guardian_summaries',discourseId);
   // Skip if already summarised and not updated since
@@ -3985,7 +4048,7 @@ async function presSummariseForGuardian(discourseId){
 
 
 async function summariseHistory(charId,messages){
-  const key=localStorage.getItem("nq_api_key")||"";
+  const key=await readSecureKey('nq_api_key')||"";
   if(!key||messages.length<6)return null;
   try{
     const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",max_tokens:300,messages:[{role:"system",content:"Compress this conversation into 5-8 bullet points. Capture emotional tone, key decisions, unresolved tensions, named facts. Ruthlessly concise. No preamble."},{role:"user",content:messages.map(m=>`${m.role}: ${m.content}`).join("\n")}]})});
@@ -4156,7 +4219,7 @@ function openPersonaPillSelector(){
 
 // Notice 'text' is removed from parameters
 async function callAIForChat(char, history){
-  const key=localStorage.getItem("nq_api_key")||"";
+  const key=await readSecureKey('nq_api_key')||"";
   if(!key){showToast("Add API Key in Settings");return null;}
 
   if(history.length>=15 && history.length%5===0){
@@ -4267,16 +4330,34 @@ async function renderVoidView(){
   const delD=await getDeletedDiscourses(),delC=await getDeletedCharacters();
   if(!delD.length&&!delC.length){s.innerHTML='<div class="table-empty" style="grid-column:unset;display:flex;"><div class="table-empty-glyph">◌</div><div class="table-empty-text">Void is empty</div></div>';return;}
   const list=document.createElement('div');list.style.cssText='display:flex;flex-direction:column;gap:8px;';
-  for(const d of delD){
+    for(const d of delD){
     const date=new Date(d.deleted_at||d.updated_at).toLocaleDateString("en-US",{month:"short",day:"numeric"});
     const item=document.createElement('div');item.className='void-item';
-    item.innerHTML=`<div class="void-item-info"><div class="void-item-title">${escHtml(d.title||'Untitled')}<span class="void-badge discourse">Discourse</span></div><div class="void-item-date">Deleted ${date}</div></div><div class="void-item-actions"><button class="btn-restore" onclick="handleRestore('${d.id}','discourse')">↩ Undeath</button><button class="btn-purge" onclick="handlePurge('${d.id}','discourse')">✕ Purge</button></div>`;
+    // Info section -- safe innerHTML because escHtml is applied
+    const info=document.createElement('div');info.className='void-item-info';
+    info.innerHTML=`<div class="void-item-title">${escHtml(d.title||'Untitled')}<span class="void-badge discourse">Discourse</span></div><div class="void-item-date">Deleted ${date}</div>`;
+    // Buttons built via DOM -- no id injection into onclick strings
+    const actions=document.createElement('div');actions.className='void-item-actions';
+    const restoreBtn=document.createElement('button');restoreBtn.className='btn-restore';restoreBtn.textContent='↩ Undeath';
+    restoreBtn.addEventListener('click',()=>handleRestore(d.id,'discourse'));
+    const purgeBtn=document.createElement('button');purgeBtn.className='btn-purge';purgeBtn.textContent='✕ Purge';
+    purgeBtn.addEventListener('click',()=>handlePurge(d.id,'discourse'));
+    actions.appendChild(restoreBtn);actions.appendChild(purgeBtn);
+    item.appendChild(info);item.appendChild(actions);
     list.appendChild(item);
   }
-  for(const c of delC){
+    for(const c of delC){
     const date=new Date(c.deleted_at||c.updated_at).toLocaleDateString("en-US",{month:"short",day:"numeric"});
     const item=document.createElement('div');item.className='void-item';
-    item.innerHTML=`<div class="void-item-info"><div class="void-item-title">${escHtml(c.name)}<span class="void-badge character">Character</span></div><div class="void-item-date">Deleted ${date}</div></div><div class="void-item-actions"><button class="btn-restore" onclick="handleRestore('${c.id}','character')">↩ Undeath</button><button class="btn-purge" onclick="handlePurge('${c.id}','character')">✕ Purge</button></div>`;
+    const info=document.createElement('div');info.className='void-item-info';
+    info.innerHTML=`<div class="void-item-title">${escHtml(c.name)}<span class="void-badge character">Character</span></div><div class="void-item-date">Deleted ${date}</div>`;
+    const actions=document.createElement('div');actions.className='void-item-actions';
+    const restoreBtn=document.createElement('button');restoreBtn.className='btn-restore';restoreBtn.textContent='↩ Undeath';
+    restoreBtn.addEventListener('click',()=>handleRestore(c.id,'character'));
+    const purgeBtn=document.createElement('button');purgeBtn.className='btn-purge';purgeBtn.textContent='✕ Purge';
+    purgeBtn.addEventListener('click',()=>handlePurge(c.id,'character'));
+    actions.appendChild(restoreBtn);actions.appendChild(purgeBtn);
+    item.appendChild(info);item.appendChild(actions);
     list.appendChild(item);
   }
   s.appendChild(list);
@@ -4732,7 +4813,7 @@ async function importJSON(event){const file=event.target.files[0];if(!file)retur
 /* MOSAIC EXTRACT */
 async function extractMemory(){
   if(!currentDiscourseId)return;const rawText=document.getElementById("content-textarea").value.trim();if(!rawText||rawText.length<50){showToast("Write more before extracting ◆");return;}
-  const key=localStorage.getItem("nexus_v7_key")||localStorage.getItem("nq_api_key")||"";if(!key){showToast("Add OpenRouter key in Settings");return;}
+  const key=localStorage.getItem("nexus_v7_key")||await readSecureKey('nq_api_key')||"";if(!key){showToast("Add OpenRouter key in Settings");return;}
   document.getElementById("extract-loading").classList.add("visible");
   try{const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:localStorage.getItem("activeModel_v1")||localStorage.getItem("nq_model")||"deepseek/deepseek-v4-flash",max_tokens:350,messages:[{role:"system",content:`You are a conceptual anchor extractor. Read the text and return exactly 4-6 anchor phrases. Format: one per line, \"Category: brief anchor phrase\". Categories: Core tension, Open question, Key concept, Hidden assumption, Named force, Recurring image. Reply with ONLY the list.`},{role:"user",content:rawText.slice(0,3000)}]})});
   const data=await res.json();const raw=data.choices?.[0]?.message?.content||"";if(!raw.trim()){showToast("Nothing extracted ◆");return;}
@@ -4790,8 +4871,8 @@ function showToast(msg){const t=document.getElementById("cosm-toast");t.textCont
 function escHtml(str){if(!str)return"";return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;");}
 /* SUPABASE DELTA SYNC ENGINE */
 async function getCloudCryptoKey() {
-  if (!window.sessionSovereignKey) throw new Error("Key not loaded");
-  return await crypto.subtle.importKey('raw', window.sessionSovereignKey, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+  if (!getSovereignKey()) throw new Error("Key not loaded");
+  return await crypto.subtle.importKey('raw', getSovereignKey(), {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
 }
 
 async function encForCloud(obj) {
@@ -4809,10 +4890,10 @@ async function decFromCloud(encStr) {
 }
 
 async function handleSync() {
-  const supaUrl = localStorage.getItem('nq_supa_url');
-  const supaKey = localStorage.getItem('nq_supa_key');
+  const supaUrl = await readSecureKey('nq_supa_url');
+  const supaKey = await readSecureKey('nq_supa_key');
   if (!supaUrl || !supaKey) { showToast("⚠ Add Supabase keys in Settings"); return; }
-  if (!window.sessionSovereignKey) { showToast("⚠ Unlock Abyss first"); return; }
+  if (!getSovereignKey()) { showToast("⚠ Unlock Abyss first"); return; }
   showToast("Syncing with the Void...");
   try {
     const lastSync = parseInt(localStorage.getItem('nq_last_sync') || '0');
@@ -4915,7 +4996,7 @@ function resetGuardianUI(){
 }
 
 async function summonGuardian(userAddition){
-  var apiKey = localStorage.getItem('nq_api_key');
+  var apiKey = await readSecureKey('nq_api_key');
   if(!apiKey){ showToast('No API key in Settings'); return; }
   var guardianModel = localStorage.getItem('nq_guardian_model') || localStorage.getItem('nq_model') || 'deepseek/deepseek-v3.2';
   var baseUrl = localStorage.getItem('nq_base_url') || 'https://openrouter.ai/api/v1';
@@ -5173,7 +5254,7 @@ document.getElementById('btn-ie-manifest-close').addEventListener('click', close
 document.getElementById('btn-ie-dev-forge').addEventListener('click', devCreateIEDraft);
 
   document.getElementById('btn-settings-confirm').addEventListener('click', () => {
-  localStorage.setItem('nq_api_key', document.getElementById('input-api-key').value.trim());
+localStorage.setItem('nq_api_key', document.getElementById('input-api-key').value.trim());
   localStorage.setItem('nq_base_url', document.getElementById('input-base-url').value.trim());
   localStorage.setItem('nq_model', document.getElementById('input-model').value); 
   closeOverlay();
@@ -5235,51 +5316,89 @@ document.getElementById('btn-guardian-log-close').addEventListener('click', clos
   document.getElementById('lineage-overlay').addEventListener('click', closeLineage);
   // Initial draw
   renderGoldTicks();
-  // Final boot trigger with Gatekeeper
-  async function bootApp() {
-  const DEV_MODE = true;
   
-  if(DEV_MODE) {
+// bootApp function
+async function bootApp() {
+  const DEV_MODE = true; // flip to false for production
+  
+  if (DEV_MODE) {
+  try {
     document.getElementById('lock-screen').style.display = 'none';
     await init();
-    return;
+  } catch(e) {
+    console.error('DEV boot failed:', e);
+    alert('Boot error: ' + e.message);
   }
-    const lockScreen = document.getElementById('lock-screen');
-    const manualBtn = document.getElementById('btn-manual-unlock');
-    
-    try {
-      // 1. Auto-trigger Face ID instantly on load
-      const unlocked = await unlockWithPRF();
-      
-      if (unlocked) {
-        // Success: Destroy lock screen and boot app
-        lockScreen.style.display = 'none';
-        await init();
-      } else {
-        // Failed/Canceled: Show manual button so user isn't permanently trapped
-        manualBtn.style.display = 'block';
-        manualBtn.onclick = async () => {
-          const manualUnlock = await unlockWithPRF();
-          if (manualUnlock) {
-            lockScreen.style.display = 'none';
-            await init();
-          } else {
-            // FaceID failed/canceled. Reveal the manual Key Input box!
-            manualBtn.style.display = 'none';
-            document.getElementById('fallback-key-input').style.display = 'block';
-            document.getElementById('btn-fallback-unlock').style.display = 'block';
-            document.getElementById('btn-fallback-unlock').onclick = unlockWithFallbackKey;
-          }
-        };
-      }
-    } catch (err) {
-      console.error("BOOT CRASH:", err);
-      alert("The Abyss is blocked. Check the console.");
+  return;
+}
+
+  const lockScreen = document.getElementById('lock-screen');
+  const statusEl = document.getElementById('lock-status'); // add this element (see HTML patch below)
+  let faceAttempts = 0;
+  const MAX_FACE_ATTEMPTS = 3;
+  let cooldownActive = false;
+
+  async function tryFaceID() {
+    if (faceAttempts >= MAX_FACE_ATTEMPTS) {
+      showBackupKeyInput();
+      return;
+    }
+    faceAttempts++;
+    statusEl.textContent = `Face ID attempt ${faceAttempts} of ${MAX_FACE_ATTEMPTS}...`;
+    const unlocked = await unlockWithPRF();
+    if (unlocked) {
+      lockScreen.style.display = 'none';
+      await init();
+    } else if (faceAttempts < MAX_FACE_ATTEMPTS) {
+      statusEl.textContent = `Failed. ${MAX_FACE_ATTEMPTS - faceAttempts} attempt${MAX_FACE_ATTEMPTS - faceAttempts > 1 ? 's' : ''} remaining.`;
+      setTimeout(tryFaceID, 800); // brief pause between attempts
+    } else {
+      showBackupKeyInput();
     }
   }
 
-  bootApp();
+  function showBackupKeyInput() {
+    statusEl.textContent = 'Enter sovereign backup key.';
+    document.getElementById('fallback-key-input').style.display = 'block';
+    document.getElementById('btn-fallback-unlock').style.display = 'block';
+    document.getElementById('btn-fallback-unlock').onclick = unlockWithFallbackKey;
+    // Offer one cooldown Face ID retry
+    document.getElementById('btn-faceid-retry').style.display = 'block'; // add this button (see HTML patch)
+    document.getElementById('btn-faceid-retry').onclick = () => tryCooldownFaceID();
+  }
+
+  async function tryCooldownFaceID() {
+    if (cooldownActive) return;
+    const btn = document.getElementById('btn-faceid-retry');
+    cooldownActive = true;
+    btn.disabled = true;
+    let secs = 30;
+    const interval = setInterval(() => {
+      secs--;
+      btn.textContent = `◈ Retry Face ID (${secs}s)`;
+      if (secs <= 0) {
+        clearInterval(interval);
+        btn.textContent = '◈ Try Face ID';
+        btn.disabled = false;
+        cooldownActive = false;
+      }
+    }, 1000);
+    // Attempt immediately, cooldown prevents re-tap
+    const unlocked = await unlockWithPRF();
+    if (unlocked) {
+      lockScreen.style.display = 'none';
+      await init();
+    } else {
+      statusEl.textContent = 'Face ID rejected. Use sovereign key.';
+    }
+  }
+
+  tryFaceID(); // kick off on boot
+}
+
+bootApp();
 });
+
 
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 
