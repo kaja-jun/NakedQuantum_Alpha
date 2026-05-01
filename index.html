@@ -2252,14 +2252,14 @@ const modelStr = models.length ? models.map(m => m.model_id?.split('/').pop()).j
 }
 
 async function openIEChat(id){
-  
-  const ie = await 
-  getImmutableEntity(id);
+  const ie = await getImmutableEntity(id);
   if(!ie) return;
+  // Reset stuck send state on every entry
+  isSending = false;
   
   activeCharId = id;
   activeIE = ie; // Store the IE data for chat context
-  
+
   // Use display_name for the chat header
   document.getElementById('chat-char-name').textContent = ie.display_name || 'Unnamed';
   document.getElementById('chat-messages').innerHTML = '';
@@ -3966,19 +3966,30 @@ function closeCharacterForge(){
 
 /* CHAT */
 async function openChat(id){
-// Check if tapping an IE
   const ieCheck = await getImmutableEntity(id);
   if(ieCheck && ieCheck.signature){ openIEBottomSheet(id); return; }
   if(ieCheck && !ieCheck.signature){ showToast('◈ Draft -- go to ∞ page to forge'); return; }
-  activeCharId=id;
-  const c=await getCharacter(id);
-  document.getElementById('chat-char-name').textContent=c.name;
-  document.getElementById('chat-messages').innerHTML='';
-  const history=await dbGetByIndex('history','charId',id);
-  history.forEach(h=>appendChatMessage(h.role,h.content));
+  
+  // Reset IE state -- critical to prevent bleed from IE chat
+  activeIE = null;
+  isSending = false; // reset any stuck send state
+  
+  activeCharId = id;
+  const c = await getCharacter(id);
+  document.getElementById('chat-char-name').textContent = c.name;
+  document.getElementById('chat-messages').innerHTML = '';
+  
+  // Hide IE-only elements
+  const chip = document.getElementById('ie-model-chip');
+  if(chip) chip.style.display = 'none';
+  document.getElementById('chat-persona-pill').style.display = '';
+  document.getElementById('btn-chat-edit').style.display = '';
+  
+  const history = await dbGetByIndex('history','charId',id);
+  history.forEach(h => appendChatMessage(h.role, h.content));
+  chatPersonaOverride = c.player_role_id || null;
+  updatePersonaPill();
   showPanel('view-chat');
-chatPersonaOverride=c.player_role_id||null;
-updatePersonaPill();
 }
 
 let isSending = false;
@@ -4000,14 +4011,16 @@ async function handleChatSend(){
   let history = await dbGetByIndex('history','charId',activeCharId);
   history = history.map(h=>({...h})).sort((a,b)=>a.created_at-b.created_at);
 
-  const response = await callAIForChat(char, history);
-
-  if(response){
-    appendChatMessage('char',response);
-    const aiMsgId = 'h_' + crypto.randomUUID();
-    await dbPut('history', { id: aiMsgId, charId: activeCharId, role: 'char', content: response, created_at: now+1 });
+    try {
+    const response = await callAIForChat(char, history);
+    if(response){
+      appendChatMessage('char',response);
+      const aiMsgId = 'h_' + crypto.randomUUID();
+      await dbPut('history', { id: aiMsgId, charId: activeCharId, role: 'char', content: response, created_at: now+1 });
+    }
+  } finally {
+    isSending = false;
   }
-  isSending = false;
 }
 
 async function presSummariseForGuardian(discourseId){
@@ -5410,7 +5423,6 @@ window.cosmOSPinDisc=async function({title,raw_text,source_link,backlink}){const
 </div>
 
 <div class="watcher-loading-dot" id="watcher-loading-dot"></div>
-
 <div class="watcher-dot" id="watcher-dot"></div>
 <div class="watcher-panel" id="watcher-panel">
   <div class="watcher-panel-title">◈ Resonance</div>
