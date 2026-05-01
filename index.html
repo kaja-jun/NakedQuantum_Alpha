@@ -2263,7 +2263,9 @@ async function openIEChat(id){
   // Use display_name for the chat header
   document.getElementById('chat-char-name').textContent = ie.display_name || 'Unnamed';
   document.getElementById('chat-messages').innerHTML = '';
-  
+  document.getElementById('chat-input').value = '';
+document.getElementById('chat-input').style.height = 'auto';
+ 
   // Load chat history -- IEs use the same history table, keyed by charId = ie.id
   const history = await dbGetByIndex('history', 'charId', id);
   history.forEach(h => appendChatMessage(h.role, h.content));
@@ -2272,14 +2274,16 @@ async function openIEChat(id){
   (typeof ie.model_variants === 'string' ? JSON.parse(ie.model_variants) : ie.model_variants) 
   : [];
 const chip = document.getElementById('ie-model-chip');
-if(chip && currentIEModels.length > 0){
+if(chip && ieModels.length > 0){
+  // Use ieModels from THIS ie, not stale currentIEModels
   chip.style.display = 'block';
   chip.dataset.idx = '0';
-  chip.textContent = `⟳ ${currentIEModels[0].split('/').pop()} 1/${currentIEModels.length}`;
+  chip.dataset.models = JSON.stringify(ieModels); // THIS was missing
+  chip.textContent = `⟳ ${ieModels[0].model_id?.split('/').pop()} 1/${ieModels.length}`;
 } else if(chip){
   chip.style.display = 'none';
+  chip.dataset.models = '[]';
 }
-
   document.getElementById('chat-persona-pill').style.display = 'none';
   // Hide edit button -- IE is immutable
   document.getElementById('btn-chat-edit').style.display = 'none';
@@ -3978,7 +3982,9 @@ async function openChat(id){
   const c = await getCharacter(id);
   document.getElementById('chat-char-name').textContent = c.name;
   document.getElementById('chat-messages').innerHTML = '';
-  
+  document.getElementById('chat-input').value = '';
+document.getElementById('chat-input').style.height = 'auto';
+
   // Hide IE-only elements
   const chip = document.getElementById('ie-model-chip');
   if(chip) chip.style.display = 'none';
