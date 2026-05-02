@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.30.5</title>
+<title>NakedQuantum_dev v0.31</title>
 <style>
 :root {
   --bg: #000000;
@@ -67,10 +67,11 @@ button {
 .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (min-width: 540px) { .cards-grid { grid-template-columns: repeat(3, 1fr); } }
 .card:last-child:nth-child(odd) { grid-column: span 2; }
+
 .folder-card, .discourse-card, .character-card { user-select: none; -webkit-user-select: none; }
 .card-selected { border-color: var(--accent) !important; background: rgba(200,160,80,0.08) !important; }
 
-.folder-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 12px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.18s, background 0.18s; min-height: 90px; display: flex; flex-direction: column; justify-content: space-between; }
+.folder-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 12px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.18s, background 0.18s; min-height: 200px; display: flex; flex-direction: column; justify-content: space-between; }
 .folder-card.long-pressing { background: var(--surface2); border-color: var(--accent); transform: scale(0.98); }
 .folder-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent-dim), transparent); opacity: 0.4; }
 .folder-card:active { border-color: var(--accent); background: var(--surface2); }
@@ -79,13 +80,13 @@ button {
 .folder-card-name { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.2px; }
 .folder-card-meta { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; margin-top: 3px; }
 
-.discourse-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.18s, background 0.18s; min-height: 110px; display: flex; flex-direction: column; gap: 6px; }
+.discourse-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.18s, background 0.18s; min-height: 200px; display: flex; flex-direction: column; gap: 6px; }
 .discourse-card.long-pressing { background: var(--surface2); border-color: var(--accent); transform: scale(0.98); }
 .discourse-card::after { content: ''; position: absolute; bottom: -3px; left: 4px; right: 4px; height: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; z-index: -1; opacity: 0.7; }
 .discourse-card::before { content: ''; position: absolute; bottom: -6px; left: 8px; right: 8px; height: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; z-index: -2; opacity: 0.5; }
 .discourse-card:active { border-color: var(--accent); background: var(--surface2); }
 .discourse-card-title { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.discourse-card-preview { font-size: 11px; color: var(--muted); font-style: italic; line-height: 1.4; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.discourse-card-preview { font-size: 11px; color: var(--muted); font-style: italic; line-height: 1.4; flex: 1; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .discourse-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
 .discourse-card-date { font-size: 9px; color: var(--muted); letter-spacing: 0.5px; opacity: 0.7; }
 .discourse-card-badges { display: flex; align-items: center; gap: 5px; }
@@ -294,7 +295,6 @@ button {
 .deep-soup-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; flex-shrink: 0; }
 .deep-soup-title { font-size: 9px; letter-spacing: 3px; color: var(--accent-dim); opacity: 0.7; font-weight: 900; text-transform: uppercase; }
 
-
 /* THE LINEAGE NAVIGATOR */
 #lineage-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1500; display: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 #lineage-overlay.active { display: block; }
@@ -397,8 +397,32 @@ button {
 .void-badge.discourse { background: rgba(200,160,80,0.15); color: var(--accent); }
 .void-badge.character { background: rgba(160,216,160,0.15); color: #a0d8a0; }
 
+/* SECTION SCROLL -- capped 2 rows, horizontal overflow */
+.section-scroll-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 0 16px 4px;
+}
+.section-scroll-wrap::-webkit-scrollbar { display: none; }
+
+.section-grid {
+  display: grid;
+  grid-template-rows: repeat(2, 200px);
+  grid-auto-flow: column;
+  grid-auto-columns: calc(50vw - 20px);
+  gap: 10px;
+}
+
+.section-grid.single-row {
+  grid-template-rows: 200px;
+}
+
+/* SANCTUARY */
 .sanctuary-view { background: transparent; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.character-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.18s, background 0.18s; min-height: 100px; display: flex; flex-direction: column; justify-content: space-between; }
+
+.character-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.18s, background 0.18s; min-height: 200px; display: flex; flex-direction: column; justify-content: space-between; }
 .character-card:active { border-color: var(--accent); background: var(--surface2); }
 .character-card.long-pressing { background: var(--surface2); border-color: var(--accent); transform: scale(0.98); }
 .char-card-name { font-size: 15px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
@@ -3053,10 +3077,10 @@ document.getElementById('view-soup').addEventListener('touchstart',resetBottomBa
 
 function renderDefaultBar(mode) {
   if (mode === 'soup') {
-    showBottomBar([
+        showBottomBar([
       { icon: '▤', label: 'Folder', action: () => openFolderModal() },
-      { icon: '☆', label: 'Discourse', action: () => handleNewDiscourse() },
       { icon: '⌇', label: 'Spark', action: () => openQuickCapture() },
+      { icon: '◎', label: 'Chronicle', action: () => handleNewChronicle() },
       { icon: '⌬', label: 'Engram', action: () => openBurnDiscModal() }
     ]);
   } else {
@@ -3438,7 +3462,6 @@ for(const d of [...discs,...notes]){
 }
 const forgottenFolders=Object.keys(forgottenFolderCount).length;
 
-
   if (window.firefly) firefly.sd(allD.reduce((s, d) => s + (d.raw_text || '').length, 0));
 
   if (!activeFolders.length && !activeDiscs.length && !forgottenFolders && !forgottenDiscCount && !forgottenSparkCount) {
@@ -3476,36 +3499,43 @@ const forgottenFolders=Object.keys(forgottenFolderCount).length;
       card.onmouseup = () => cancelLP(card);
       card.onmouseleave = () => cancelLP(card);
       card.ontouchend = () => cancelLP(card);
-
       g.appendChild(card);
     }
     surface.appendChild(g);
   }
 
-  const activeDiscourses = activeDiscs.filter(d=>d.item_type!=='note');
-const activeSparks = activeDiscs.filter(d=>d.item_type==='note');
+  const activeDiscourses = activeDiscs.filter(d => d.item_type === 'discourse' || (!d.item_type && d.item_type !== 'note' && d.item_type !== 'chronicle'));
+const activeSparks = activeDiscs.filter(d => d.item_type === 'note');
+const activeChronicles = activeDiscs.filter(d => d.item_type === 'chronicle');
 
-if(activeDiscourses.length){
-  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Discourses';surface.appendChild(l);
-  const g=document.createElement('div');g.className='cards-grid';
-  for(const d of activeDiscourses){
-    const card=await buildDiscourseCard(d);
-    if(d._phase==='fading') card.classList.add('card-fading');
+// Helper: render a capped horizontal scroll section
+async function renderSection(items, label, builder) {
+  if (!items.length) return;
+  const l = document.createElement('div');
+  l.className = 'cards-section-label';
+  l.textContent = label;
+  surface.appendChild(l);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'section-scroll-wrap';
+
+  const g = document.createElement('div');
+  g.className = 'section-grid' + (items.length <= 2 ? ' single-row' : '');
+
+  for (const d of items) {
+    const card = await builder(d);
+    if (d._phase === 'fading') card.classList.add('card-fading');
     g.appendChild(card);
   }
-  surface.appendChild(g);
+
+  wrap.appendChild(g);
+  surface.appendChild(wrap);
 }
 
-if(activeSparks.length){
-  const l=document.createElement('div');l.className='cards-section-label';l.textContent='Sparks';surface.appendChild(l);
-  const g=document.createElement('div');g.className='cards-grid';
-  for(const d of activeSparks){
-    const card=await buildDiscourseCard(d);
-    if(d._phase==='fading') card.classList.add('card-fading');
-    g.appendChild(card);
-  }
-  surface.appendChild(g);
-}
+await renderSection(activeDiscourses, 'Discourses', buildDiscourseCard);
+await renderSection(activeSparks, 'Sparks', buildDiscourseCard);
+await renderSection(activeChronicles, 'Chronicles', buildDiscourseCard);
+
 // Spawn motes for forgotten items in this view
 const totalForgotten = forgottenDiscCount + forgottenSparkCount;
 if(totalForgotten > 0) spawnMotes(surface, totalForgotten, false);
@@ -3566,11 +3596,10 @@ function spawnMotes(surface, count, heavy=false){
   }
 }
 
-
 async function buildDiscourseCard(d){
   const tile = await getMosaicTile(d.id), hasMosaic = tile && tile.anchors && tile.anchors.length > 0;
   const date = new Date(d.updated_at||d.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric"});
-  const preview = d.raw_text ? d.raw_text.replace(/\n+/g,' ').slice(0,100) : '';
+  const preview = d.raw_text ? d.raw_text.replace(/\n+/g,' ').slice(0,220) : '';
   const card = document.createElement('div');
   card.className = 'discourse-card card';
   
@@ -3764,7 +3793,8 @@ async function openDiscourse(id){
 async function renderMeta(disc){
   const el=document.getElementById("discourse-meta");
   const date=new Date(disc.created_at).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
-  let html=`<span>${date}</span>`;
+    const typeLabel = disc.item_type === 'chronicle' ? 'Chronicle' : disc.item_type === 'note' ? 'Spark' : 'Discourse';
+  let html = `<span>${date}</span><span class="meta-separator">·</span><span style="color:var(--accent-dim);font-size:9px;letter-spacing:1px;text-transform:uppercase;">${typeLabel}</span>`;
   if(disc.folder_id){const f=await dbGet("cosm_folders",disc.folder_id);if(f)html+=`<span class="meta-separator">·</span><span>▸ ${escHtml(f.name)}</span>`;}
   const bl=await getBacklink(disc.id);
   if(bl)html+=`<span class="meta-separator">·</span><a class="source-link" href="#">⟵ ${escHtml(bl.char_name||"Sanctuary")}</a>`;
@@ -3777,6 +3807,29 @@ async function renderMosaicDisplay(dId){
   const ah=tile.anchors.map(a=>{const p=a.split(":");if(p.length>1)return`<div class="mosaic-anchor"><span class="anchor-dot"></span><span><span class="anchor-cat">${escHtml(p[0].trim())}:</span> ${escHtml(p.slice(1).join(":").trim())}</span></div>`;return`<div class="mosaic-anchor"><span class="anchor-dot"></span><span>${escHtml(a)}</span></div>`;}).join("");
   el.innerHTML=`<div class="mosaic-block"><div class="mosaic-header"><span class="mosaic-label">◈ Mosaic</span><button class="btn-delete-mosaic" id="btn-clear-mosaic">✕ Clear</button></div><div class="mosaic-anchors-wrap">${ah}</div></div>`;
   document.getElementById('btn-clear-mosaic').addEventListener('click',confirmDeleteMosaic);
+}
+
+async function handleNewChronicle() {
+  const folders = await getFolders();
+  const sel = document.getElementById('discourse-modal-folder');
+  sel.innerHTML = '<option value="">-- Choose folder (or auto-wrap) --</option>';
+  folders.filter(f => !f.isDeleted).forEach(f => {
+    const o = document.createElement('option');
+    o.value = f.id; o.textContent = f.name;
+    if (f.id === currentFolderId) o.selected = true;
+    sel.appendChild(o);
+  });
+  const no = document.createElement('option');
+  no.value = '__new__'; no.textContent = '+ New folder...';
+  sel.appendChild(no);
+  document.getElementById('discourse-modal-title').value = '';
+  document.getElementById('discourse-modal-title').placeholder = 'Chronicle title...';
+  document.getElementById('discourse-modal-new-folder').style.display = 'none';
+  // Mark modal as chronicle mode
+  document.getElementById('discourse-modal').dataset.type = 'chronicle';
+  document.getElementById('discourse-modal').classList.add('visible');
+  document.getElementById('cosm-overlay').classList.add('active');
+  setTimeout(() => document.getElementById('discourse-modal-title').focus(), 100);
 }
 
 async function saveCurrentDiscourse(silent=false){
@@ -3834,10 +3887,12 @@ async function confirmNewDiscourse(){
     const f=await dbGet('cosm_folders',fId);
     if(f){breadcrumbPath=[{id:null,name:'◈ The Soup'},{id:fId,name:f.name}];currentFolderId=fId;}
   }
-  
   closeOverlay();
+  
   if(currentDiscourseId)await saveCurrentDiscourse(true);
-  const disc=await createDiscourse({title,raw_text:'',folder_id:fId});
+    const isChronicle = document.getElementById('discourse-modal').dataset.type === 'chronicle';
+  document.getElementById('discourse-modal').dataset.type = '';
+  const disc = await createDiscourse({title, raw_text:'', folder_id: fId, item_type: isChronicle ? 'chronicle' : 'discourse'});
   await openDiscourse(disc.id);
   setTimeout(()=>{
     const t=document.getElementById('discourse-title');
@@ -5486,7 +5541,6 @@ async function bootApp() {
   }
   return;
 }
-
   const lockScreen = document.getElementById('lock-screen');
   const statusEl = document.getElementById('lock-status'); // add this element (see HTML patch below)
   let faceAttempts = 0;
@@ -5547,13 +5601,10 @@ async function bootApp() {
       statusEl.textContent = 'Face ID rejected. Use sovereign key.';
     }
   }
-
   tryFaceID(); // kick off on boot
 }
-
 bootApp();
 });
-
 
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 
@@ -5563,9 +5614,7 @@ window.cosmOSPinDisc=async function({title,raw_text,source_link,backlink}){const
 <div class="bottom-bar" id="bottom-bar">
   <div class="bottom-bar-scroll" id="bottom-bar-scroll"></div>
 </div>
-
 <div class="watcher-loading-dot" id="watcher-loading-dot"></div>
-
 <div class="watcher-dot" id="watcher-dot"></div>
 <div class="watcher-panel" id="watcher-panel">
   <div class="watcher-panel-title">◈ Resonance</div>
