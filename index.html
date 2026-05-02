@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31</title>
+<title>NakedQuantum_dev v0.31.1</title>
 <style>
 :root {
   --bg: #000000;
@@ -66,7 +66,7 @@ button {
 .cards-section-label { font-size: 9px; letter-spacing: 3px; color: var(--accent); opacity: 0.45; font-weight: 900; text-transform: uppercase; padding: 14px 0 8px; }
 .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (min-width: 540px) { .cards-grid { grid-template-columns: repeat(3, 1fr); } }
-.card:last-child:nth-child(odd) { grid-column: span 2; }
+.cards-grid .card:last-child:nth-child(odd) { grid-column: span 2; }
 
 .folder-card, .discourse-card, .character-card { user-select: none; -webkit-user-select: none; }
 .card-selected { border-color: var(--accent) !important; background: rgba(200,160,80,0.08) !important; }
@@ -404,17 +404,18 @@ button {
   scrollbar-width: none;
   margin: 0 -16px;
   padding: 0 16px 4px;
+  display: flex;
 }
 .section-scroll-wrap::-webkit-scrollbar { display: none; }
 
 .section-grid {
-  display: grid;
+  display: inline-grid;
   grid-template-rows: repeat(2, 200px);
   grid-auto-flow: column;
-  grid-auto-columns: calc(50vw - 20px);
+  grid-auto-columns: 160px;
   gap: 10px;
+  flex-shrink: 0;
 }
-
 .section-grid.single-row {
   grid-template-rows: 200px;
 }
@@ -3409,91 +3410,155 @@ function openSanctuarySearch(){
 async function renderTableView() {
   const surface = document.getElementById('table-surface');
   if (!surface) return;
-  surface.onclick = (e) => {
-  if(e.target===surface && selectMode){
-    exitSelectMode();
-  }
-};
+  surface.onclick = (e) => { if(e.target===surface && selectMode) exitSelectMode(); };
   surface.innerHTML = '';
   renderBreadcrumb();
 
   const safeMatch = (a, b) => {
-    const isANull = (!a || String(a) === 'null' || String(a) === 'root' || String(a) === 'undefined');
-    const isBNull = (!b || String(b) === 'null' || String(b) === 'root' || String(b) === 'undefined');
-    if (isANull && isBNull) return true;
+    const isANull = (!a || String(a)==='null' || String(a)==='root' || String(a)==='undefined');
+    const isBNull = (!b || String(b)==='null' || String(b)==='root' || String(b)==='undefined');
+    if(isANull && isBNull) return true;
     return String(a) === String(b);
   };
 
   const isAtRoot = (!currentFolderId || currentFolderId === 'root');
-
   const sw = document.getElementById('search-bar-wrap');
-  if (sw) sw.style.display = isAtRoot ? 'none' : 'block';
+  if(sw) sw.style.display = isAtRoot ? 'none' : 'block';
 
   const allF = (await getFolders()) || [];
   const allD = (await getDiscourses()) || [];
+  const allFolders = allF;
+  const allDiscs = allD;
 
-  const allFolders = await getFolders();
-const allDiscs = await dbGetAll("cosm_discourses");
+  if(window.firefly) firefly.sd(allD.reduce((s,d) => s+(d.raw_text||'').length, 0));
 
-const cf = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, currentFolderId));
-const notes = allD.filter(d => !d.isDeleted && d.item_type === 'note' && safeMatch(d.folder_id, currentFolderId));
-const discs = allD.filter(d => !d.isDeleted && d.item_type !== 'note' && safeMatch(d.folder_id, currentFolderId));
+  // ── ROOT: Dashboard mode ──────────────────────────────────────────────────
+  if(isAtRoot) {
+    // Folders -- 2 row horizontal scroll
+    const activeFolders = [];
+    for(const f of allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, null))) {
+      const vitality = await getFolderVitality(f.id, allFolders, allDiscs);
+      const phase = vitality ? decayPhase(vitality) : decayPhase(f.created_at||0);
+      if(phase === 'active' || phase === 'fading') activeFolders.push({...f, _phase: phase});
+    }
 
-// Decay filtering
-const activeFolders=[], fadingFolders=[], forgottenFolderCount={};
-for(const f of cf){
-  const vitality = await getFolderVitality(f.id, allFolders, allDiscs);
-  const phase = vitality ? decayPhase(vitality) : decayPhase(f.created_at||0);
-  if(phase==='active') activeFolders.push({...f, _phase:'active'});
-  else if(phase==='fading') activeFolders.push({...f, _phase:'fading'});
-  else if(phase==='forgotten'||phase==='gone') forgottenFolderCount[f.id]=true;
-}
+    if(activeFolders.length) {
+      const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = 'Folders'; surface.appendChild(l);
+      const wrap = document.createElement('div'); wrap.className = 'section-scroll-wrap';
+      const g = document.createElement('div'); g.className = 'section-grid' + (activeFolders.length <= 2 ? ' single-row' : '');
+      for(const f of activeFolders) {
+        const dc = allD.filter(d => safeMatch(d.folder_id, f.id) && d.item_type !== 'note' && !d.isDeleted).length;
+        const nc = allD.filter(d => safeMatch(d.folder_id, f.id) && d.item_type === 'note' && !d.isDeleted).length;
+        const sc = allF.filter(sf => safeMatch(sf.parent_id, f.id) && !sf.isDeleted).length;
+        const meta = [];
+        if(dc > 0) meta.push(dc + (dc===1?' discourse':' discourses'));
+        if(nc > 0) meta.push(nc + (nc===1?' spark':' sparks'));
+        if(sc > 0) meta.push(sc + (sc===1?' folder':' folders'));
+        const card = document.createElement('div');
+        card.className = 'folder-card card' + (f._phase==='fading'?' card-fading':'');
+        if(typeof selectedItems !== 'undefined' && selectedItems.has(f.id)) card.classList.add('card-selected');
+        card.innerHTML = `<div class="folder-card-top"><span class="folder-icon-glyph">▤</span></div><div class="folder-card-name">${escHtml(f.name)}</div><div class="folder-card-meta">${meta.length?meta.join(' · '):'Empty'}</div>`;
+        card.onclick = () => { if(window.longPressConsumed){window.longPressConsumed=false;return;} if(typeof selectMode!=='undefined'&&selectMode){toggleSelectItem(f.id);return;} enterFolder(f.id, f.name); };
+        card.onmousedown = e => startLP(e, card, {type:'folder', id:f.id, name:f.name, data:f});
+        card.ontouchstart = e => startLP(e, card, {type:'folder', id:f.id, name:f.name, data:f}, {passive:true});
+        card.onmouseup = () => cancelLP(card);
+        card.onmouseleave = () => cancelLP(card);
+        card.ontouchend = () => cancelLP(card);
+        g.appendChild(card);
+      }
+      wrap.appendChild(g); surface.appendChild(wrap);
+    }
 
-const activeDiscs=[], fadingDiscs=[];
-let forgottenDiscCount=0, forgottenSparkCount=0;
-for(const d of [...discs,...notes]){
-  const phase = decayPhase(d.updated_at||d.created_at||0);
-  if(phase==='active') activeDiscs.push({...d,_phase:'active'});
-  else if(phase==='fading') activeDiscs.push({...d,_phase:'fading'});
-  else if(phase==='forgotten'||phase==='gone'){
-    if(d.item_type==='note') forgottenSparkCount++;
-    else forgottenDiscCount++;
-  }
-}
-const forgottenFolders=Object.keys(forgottenFolderCount).length;
+    // Recent sections helper -- 6 cards + lineage portal
+    const RECENT_MAX = 6;
 
-  if (window.firefly) firefly.sd(allD.reduce((s, d) => s + (d.raw_text || '').length, 0));
+    async function renderRecentSection(label, items) {
+      if(!items.length) return;
+      const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = label; surface.appendChild(l);
+      const wrap = document.createElement('div'); wrap.className = 'section-scroll-wrap';
+      const g = document.createElement('div'); g.className = 'section-grid single-row';
 
-  if (!activeFolders.length && !activeDiscs.length && !forgottenFolders && !forgottenDiscCount && !forgottenSparkCount) {
-    surface.innerHTML = `<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">${isAtRoot ? 'Create a folder to begin' : 'Empty Abyss'}</div></div>`;
+      const shown = items.slice(0, RECENT_MAX);
+      const hasMore = items.length > RECENT_MAX;
+
+      for(const d of shown) {
+        const card = await buildDiscourseCard(d);
+        if(d._phase==='fading') card.classList.add('card-fading');
+        g.appendChild(card);
+      }
+
+      // 7th card -- lineage portal
+      if(hasMore) {
+        const portal = document.createElement('div');
+        portal.className = 'folder-card card';
+        portal.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;opacity:0.5;border-style:dashed;';
+        portal.innerHTML = `<div style="font-size:22px;color:var(--accent);">▤</div><div style="font-size:9px;letter-spacing:2px;color:var(--accent);font-weight:900;text-transform:uppercase;">Browse All</div><div style="font-size:9px;color:var(--muted);text-align:center;padding:0 8px;">${items.length - RECENT_MAX} more</div>`;
+        portal.onclick = () => openLineage();
+        g.appendChild(portal);
+      }
+
+      wrap.appendChild(g); surface.appendChild(wrap);
+    }
+
+    // Pull recent across ALL folders, sorted by updated_at desc
+    const allActive = allD.filter(d => !d.isDeleted && decayPhase(d.updated_at||d.created_at||0) !== 'gone');
+    allActive.sort((a,b) => (b.updated_at||b.created_at||0) - (a.updated_at||a.created_at||0));
+
+    const recentDiscourses = allActive.filter(d => d.item_type === 'discourse' || (!d.item_type && d.item_type !== 'note' && d.item_type !== 'chronicle'));
+    const recentSparks = allActive.filter(d => d.item_type === 'note');
+    const recentChronicles = allActive.filter(d => d.item_type === 'chronicle');
+
+    await renderRecentSection('Recent Discourses', recentDiscourses);
+    await renderRecentSection('Recent Sparks', recentSparks);
+    await renderRecentSection('Recent Chronicles', recentChronicles);
+
+    // Decay motes across all
+    const forgottenCount = allD.filter(d => !d.isDeleted && (decayPhase(d.updated_at||d.created_at||0)==='forgotten'||decayPhase(d.updated_at||d.created_at||0)==='gone')).length;
+    if(forgottenCount > 0) spawnMotes(surface, forgottenCount, false);
     return;
   }
 
-  if (activeFolders.length) {
+  // ── FOLDER DRILL: standard grid inside a folder ───────────────────────────
+  const cf = allF.filter(f => !f.isDeleted && safeMatch(f.parent_id, currentFolderId));
+  const notes = allD.filter(d => !d.isDeleted && d.item_type === 'note' && safeMatch(d.folder_id, currentFolderId));
+  const discs = allD.filter(d => !d.isDeleted && safeMatch(d.folder_id, currentFolderId));
+
+  const activeFolders2 = [], forgottenFolderCount = {};
+  for(const f of cf) {
+    const vitality = await getFolderVitality(f.id, allFolders, allDiscs);
+    const phase = vitality ? decayPhase(vitality) : decayPhase(f.created_at||0);
+    if(phase==='active'||phase==='fading') activeFolders2.push({...f, _phase: phase});
+    else forgottenFolderCount[f.id] = true;
+  }
+
+  const activeDiscs = [];
+  let forgottenDiscCount = 0, forgottenSparkCount = 0;
+  for(const d of discs) {
+    const phase = decayPhase(d.updated_at||d.created_at||0);
+    if(phase==='active'||phase==='fading') activeDiscs.push({...d, _phase: phase});
+    else if(d.item_type==='note') forgottenSparkCount++;
+    else forgottenDiscCount++;
+  }
+  const forgottenFolders = Object.keys(forgottenFolderCount).length;
+
+  if(!activeFolders2.length && !activeDiscs.length && !forgottenFolders && !forgottenDiscCount && !forgottenSparkCount) {
+    surface.innerHTML = `<div class="table-empty"><div class="table-empty-glyph">◈</div><div class="table-empty-text">Empty Abyss</div></div>`;
+    return;
+  }
+
+  if(activeFolders2.length) {
     const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = 'Folders'; surface.appendChild(l);
     const g = document.createElement('div'); g.className = 'cards-grid';
-    for (const f of activeFolders) {
-      const dc = allD.filter(d => safeMatch(d.folder_id, f.id) && d.item_type !== 'note' && !d.isDeleted).length;
-      const nc = allD.filter(d => safeMatch(d.folder_id, f.id) && d.item_type === 'note' && !d.isDeleted).length;
+    for(const f of activeFolders2) {
+      const dc = allD.filter(d => safeMatch(d.folder_id, f.id) && !d.isDeleted).length;
       const sc = allF.filter(sf => safeMatch(sf.parent_id, f.id) && !sf.isDeleted).length;
       const meta = [];
-      if (dc > 0) meta.push(dc + (dc === 1 ? ' discourse' : ' discourses'));
-      if (nc > 0) meta.push(nc + (nc === 1 ? ' note' : ' sparks'));
-      if (sc > 0) meta.push(sc + (sc === 1 ? ' folder' : ' folders'));
-
+      if(dc > 0) meta.push(dc + ' item' + (dc===1?'':'s'));
+      if(sc > 0) meta.push(sc + ' folder' + (sc===1?'':'s'));
       const card = document.createElement('div');
-      card.className = 'folder-card card';
-      if (typeof selectedItems !== 'undefined' && selectedItems.has(f.id)) card.classList.add('card-selected');
-      
-      card.innerHTML = `<div class="folder-card-top"><span class="folder-icon-glyph">▤</span></div><div class="folder-card-name">${escHtml(f.name)}</div><div class="folder-card-meta">${meta.length ? meta.join(' · ') : 'Empty'}</div>`;
-      
-      if(f._phase==='fading') card.classList.add('card-fading');
-      
-      card.onclick = () => {
-        if (window.longPressConsumed) { window.longPressConsumed = false; return; }
-        if (typeof selectMode !== 'undefined' && selectMode) { toggleSelectItem(f.id); return; }
-        enterFolder(f.id, f.name);
-      };
+      card.className = 'folder-card card' + (f._phase==='fading'?' card-fading':'');
+      card.innerHTML = `<div class="folder-card-top"><span class="folder-icon-glyph">▤</span></div><div class="folder-card-name">${escHtml(f.name)}</div><div class="folder-card-meta">${meta.length?meta.join(' · '):'Empty'}</div>`;
+      card.onclick = () => { if(window.longPressConsumed){window.longPressConsumed=false;return;} enterFolder(f.id, f.name); };
       card.onmousedown = e => startLP(e, card, {type:'folder', id:f.id, name:f.name, data:f});
       card.ontouchstart = e => startLP(e, card, {type:'folder', id:f.id, name:f.name, data:f}, {passive:true});
       card.onmouseup = () => cancelLP(card);
@@ -3504,42 +3569,29 @@ const forgottenFolders=Object.keys(forgottenFolderCount).length;
     surface.appendChild(g);
   }
 
-  const activeDiscourses = activeDiscs.filter(d => d.item_type === 'discourse' || (!d.item_type && d.item_type !== 'note' && d.item_type !== 'chronicle'));
-const activeSparks = activeDiscs.filter(d => d.item_type === 'note');
-const activeChronicles = activeDiscs.filter(d => d.item_type === 'chronicle');
+  const folderDiscourses = activeDiscs.filter(d => d.item_type === 'discourse' || (!d.item_type && d.item_type !== 'note' && d.item_type !== 'chronicle'));
+  const folderSparks = activeDiscs.filter(d => d.item_type === 'note');
+  const folderChronicles = activeDiscs.filter(d => d.item_type === 'chronicle');
 
-// Helper: render a capped horizontal scroll section
-async function renderSection(items, label, builder) {
-  if (!items.length) return;
-  const l = document.createElement('div');
-  l.className = 'cards-section-label';
-  l.textContent = label;
-  surface.appendChild(l);
-
-  const wrap = document.createElement('div');
-  wrap.className = 'section-scroll-wrap';
-
-  const g = document.createElement('div');
-  g.className = 'section-grid' + (items.length <= 2 ? ' single-row' : '');
-
-  for (const d of items) {
-    const card = await builder(d);
-    if (d._phase === 'fading') card.classList.add('card-fading');
-    g.appendChild(card);
+  async function renderFolderSection(label, items) {
+    if(!items.length) return;
+    const l = document.createElement('div'); l.className = 'cards-section-label'; l.textContent = label; surface.appendChild(l);
+    const g = document.createElement('div'); g.className = 'cards-grid';
+    for(const d of items) {
+      const card = await buildDiscourseCard(d);
+      if(d._phase==='fading') card.classList.add('card-fading');
+      g.appendChild(card);
+    }
+    surface.appendChild(g);
   }
 
-  wrap.appendChild(g);
-  surface.appendChild(wrap);
-}
+  await renderFolderSection('Discourses', folderDiscourses);
+  await renderFolderSection('Sparks', folderSparks);
+  await renderFolderSection('Chronicles', folderChronicles);
 
-await renderSection(activeDiscourses, 'Discourses', buildDiscourseCard);
-await renderSection(activeSparks, 'Sparks', buildDiscourseCard);
-await renderSection(activeChronicles, 'Chronicles', buildDiscourseCard);
-
-// Spawn motes for forgotten items in this view
-const totalForgotten = forgottenDiscCount + forgottenSparkCount;
-if(totalForgotten > 0) spawnMotes(surface, totalForgotten, false);
-if(forgottenFolders > 0) spawnMotes(surface, forgottenFolders, true);
+  const totalForgotten = forgottenDiscCount + forgottenSparkCount;
+  if(totalForgotten > 0) spawnMotes(surface, totalForgotten, false);
+  if(forgottenFolders > 0) spawnMotes(surface, forgottenFolders, true);
 }
 
 /* DECAY SYSTEM */
@@ -5605,6 +5657,7 @@ async function bootApp() {
 }
 bootApp();
 });
+
 
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 
