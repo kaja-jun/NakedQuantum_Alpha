@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.2</title>
+<title>NakedQuantum_dev v0.31.4</title>
 <style>
 :root {
   --bg: #000000;
@@ -119,6 +119,126 @@ button {
 .lighthouse-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 28px 20px 60px; display: flex; flex-direction: column; gap: 16px; }
 /* LIGHTHOUSE VIEW FIXES (Expanded Textarea & Overlap) */
 .lighthouse-inner {display: flex;flex-direction: column;height: calc(100vh - 120px); /* Adjust based on your nav height */padding-bottom: 20px;}
+/* LIGHTHOUSE REFINED */
+.lh-save-indicator {
+  flex: 1;
+  font-size: 9px;
+  color: var(--accent-dim);
+  letter-spacing: 2px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  text-align: center;
+  pointer-events: none;
+}
+.lh-save-indicator.visible { opacity: 0.5; }
+.lh-save-indicator.saving { opacity: 1; color: var(--accent); animation: lhSavePulse 1s ease-in-out infinite; }
+@keyframes lhSavePulse { 0%,100%{opacity:0.5;} 50%{opacity:1;} }
+
+.lh-overflow-wrap { position: relative; }
+.lh-overflow-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 180px;
+  z-index: 2000;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+}
+.lh-overflow-menu.open { display: flex; }
+.lh-overflow-item {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-radius: 7px;
+  text-align: left;
+  letter-spacing: 0.5px;
+  width: 100%;
+}
+.lh-overflow-item:active { background: var(--surface); }
+.lh-overflow-item.danger { color: #ff6060; }
+.lh-overflow-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* FORMAT SHEET */
+.lh-fmt-wrap { position: relative; }
+
+.lh-fmt-sheet {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  z-index: 2000;
+  display: none;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.9);
+  min-width: 260px;
+}
+.lh-fmt-sheet.open { display: block; }
+
+.lh-fmt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+
+.lh-fmt-col { display: flex; flex-direction: column; gap: 2px; }
+
+.lh-fmt-col-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--accent-dim);
+  font-weight: 900;
+  text-transform: uppercase;
+  padding: 0 8px 6px;
+  opacity: 0.6;
+}
+
+.lh-fmt-item {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-serif);
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-align: left;
+  width: 100%;
+  font-weight: 500;
+}
+.lh-fmt-item:active { background: var(--surface); color: var(--accent); }
+
+/* WRITING SURFACE -- Georgia, more breathing room */
+.discourse-title-input {
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+  padding: 8px 0 14px;
+  outline: none;
+  font-family: var(--font-serif);
+  caret-color: var(--accent);
+  line-height: 1.3;
+}
+.content-textarea {
+  font-family: var(--font-serif) !important;
+  font-size: 16px !important;
+  line-height: 1.85 !important;
+  letter-spacing: 0.1px;
+}
+
 .discourse-title-input { width: 100%; background: none; border: none; border-bottom: 1px solid var(--border); color: var(--text); font-size: 22px; font-weight: 700; padding: 6px 0 12px; outline: none; font-family: var(--font-serif); caret-color: var(--accent); }
 .discourse-title-input::placeholder { color: var(--muted); opacity: 0.6; }
 .discourse-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
@@ -869,7 +989,6 @@ select.cosm-input {
   -webkit-user-select: none;
 }
 
-
 </style>
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/transformers.min.js">
 </head>
@@ -983,17 +1102,49 @@ select.cosm-input {
 </div>
   <div class="view-panel lighthouse-view hidden" id="view-lighthouse">
     <div class="lighthouse-nav">
-      <button class="btn-back-table" id="btn-back-table" style="padding: 7px 10px;"><span class="btn-back-arrow">←</span></button>
+      <button class="btn-back-table" id="btn-back-table" style="padding:7px 10px;"><span class="btn-back-arrow">←</span></button>
+      <div class="lh-save-indicator" id="lh-save-indicator">◆</div>
       <div class="lighthouse-tools">
         <div class="view-toggle">
           <button class="view-toggle-btn active" id="btn-write">✎</button>
           <button class="view-toggle-btn" id="btn-view">ʘ</button>
         </div>
-      <button class="tbtn" id="btn-export-html">H ↓</button>
-        <button class="tbtn" id="btn-export-md">M ↓</button>
-        <button class="tbtn" id="btn-export-pdf">P ↓</button>
-        <button class="tbtn gold" id="btn-extract">◈</button>
-        <button class="tbtn danger" id="btn-delete-discourse">✕</button>
+               <button class="tbtn gold" id="btn-extract" title="Extract Mosaic">◈</button>
+        <div class="lh-fmt-wrap">
+          <button class="tbtn" id="btn-lh-format">✎≡</button>
+          <div class="lh-fmt-sheet" id="lh-fmt-sheet">
+            <div class="lh-fmt-grid">
+              <div class="lh-fmt-col">
+                <div class="lh-fmt-col-label">Text</div>
+                <button class="lh-fmt-item" id="fmt-bold"><b>Bold</b></button>
+                <button class="lh-fmt-item" id="fmt-italic"><i>Italic</i></button>
+                <button class="lh-fmt-item" id="fmt-underline"><u>Underline</u></button>
+                <button class="lh-fmt-item" id="fmt-h1">Heading 1</button>
+                <button class="lh-fmt-item" id="fmt-h2">Heading 2</button>
+                <button class="lh-fmt-item" id="fmt-h3">Heading 3</button>
+              </div>
+              <div class="lh-fmt-col">
+                <div class="lh-fmt-col-label">Insert</div>
+                <button class="lh-fmt-item" id="fmt-bullet">• Bullet</button>
+                <button class="lh-fmt-item" id="fmt-numbered">1. Numbered</button>
+                <button class="lh-fmt-item" id="fmt-quote">" Quote</button>
+                <button class="lh-fmt-item" id="fmt-code">` Inline Code</button>
+                <button class="lh-fmt-item" id="fmt-codeblock">``` Code Block</button>
+                <button class="lh-fmt-item" id="fmt-divider-line">-- Divider</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="lh-overflow-wrap">
+          <button class="tbtn" id="btn-lh-overflow">···</button>
+          <div class="lh-overflow-menu" id="lh-overflow-menu">
+            <button class="lh-overflow-item" id="btn-export-html">H ↓ Export HTML</button>
+            <button class="lh-overflow-item" id="btn-export-md">M ↓ Export Markdown</button>
+            <button class="lh-overflow-item" id="btn-export-pdf">P ↓ Export PDF</button>
+            <div class="lh-overflow-divider"></div>
+            <button class="lh-overflow-item danger" id="btn-delete-discourse">✕ Delete</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="lighthouse-scroll">
@@ -1005,33 +1156,11 @@ select.cosm-input {
           <span>Extracting anchors...</span>
         </div>
         <div id="mosaic-display"></div>
-        
         <textarea class="content-textarea" id="content-textarea" placeholder="Begin writing..."></textarea>
-        
-       <div class="format-toolbar" id="format-toolbar">
-          <button class="fmt-btn" id="fmt-bold"><b>B</b></button>
-          <button class="fmt-btn" id="fmt-italic"><i>I</i></button>
-          <button class="fmt-btn" id="fmt-underline"><u>U</u></button>
-          <div class="fmt-divider"></div>
-          <button class="fmt-btn" id="fmt-h1">H1</button>
-          <button class="fmt-btn" id="fmt-h2">H2</button>
-          <button class="fmt-btn" id="fmt-h3">H3</button>
-          <div class="fmt-divider"></div>
-          <button class="fmt-btn" id="fmt-bullet">• --</button>
-          <button class="fmt-btn" id="fmt-numbered">1.</button>
-          <div class="fmt-divider"></div>
-          <button class="fmt-btn" id="fmt-quote">"</button>
-          <button class="fmt-btn code-btn" id="fmt-code">`c`</button>
-          <button class="fmt-btn code-btn" id="fmt-codeblock">```</button>
-          <div class="fmt-divider"></div>
-          <button class="fmt-btn" id="fmt-divider-line">--</button>
-        </div>
-
         <div class="content-view" id="content-view"></div>
       </div>
     </div>
   </div>
-
 
   <div class="view-panel sanctuary-view hidden" id="view-sanctuary">
 <div class="breadcrumb-bar" id="sanctuary-breadcrumb-bar">
@@ -3064,7 +3193,6 @@ function resetBottomBarTimer(){
     document.getElementById('bottom-bar').classList.remove('visible');
   }, 8000); // 8 seconds of inactivity
 }
-
 // Modify showBottomBar to also reset the timer
 const _origShowBottomBar=showBottomBar;
 showBottomBar=function(pills){
@@ -3072,9 +3200,6 @@ showBottomBar=function(pills){
   resetBottomBarTimer();
 };
 
-// Add touch/scroll listeners in DOMContentLoaded
-document.getElementById('view-soup').addEventListener('scroll',resetBottomBarTimer,{passive:true});
-document.getElementById('view-soup').addEventListener('touchstart',resetBottomBarTimer,{passive:true});
 
 function renderDefaultBar(mode) {
   if (mode === 'soup') {
@@ -3837,8 +3962,15 @@ async function openDiscourse(id){
   await dbPut("cosm_discourses", {...disc, updated_at: Date.now()}); 
   document.getElementById("discourse-title").value=disc.title||"";
   document.getElementById("content-textarea").value=disc.raw_text||"";
+  document.getElementById("content-textarea").value = disc.raw_text || "";
+// Trigger auto-height after content loads
+setTimeout(() => {
+  const ta = document.getElementById('content-textarea');
+  ta.style.height = 'auto';
+  ta.style.height = Math.max(ta.scrollHeight, window.innerHeight * 0.6) + 'px';
+}, 50);
   await renderMeta(disc);await renderMosaicDisplay(id);
-  setEditorMode('write');showPanel('view-lighthouse');
+setEditorMode('write');showPanel('view-lighthouse');
   if(disc.folder_id&&currentFolderId!==disc.folder_id){const f=await dbGet("cosm_folders",disc.folder_id);if(f){breadcrumbPath=[{id:null,name:'◈ The Soup'},{id:disc.folder_id,name:f.name}];currentFolderId=disc.folder_id;}}
 }
 
@@ -3888,7 +4020,10 @@ async function saveCurrentDiscourse(silent=false){
   if(!currentDiscourseId)return;
   const title=document.getElementById("discourse-title").value.trim()||"Untitled Discourse";
   const raw_text=document.getElementById("content-textarea").value;
+  const ind = document.getElementById('lh-save-indicator');
+  if(ind){ ind.textContent='◆ saving'; ind.className='lh-save-indicator saving'; }
   await updateDiscourse(currentDiscourseId,{title,raw_text});
+  if(ind){ ind.textContent='◆ saved'; ind.className='lh-save-indicator visible'; setTimeout(()=>{ ind.className='lh-save-indicator'; },2000); }
   if(!silent)showToast("Saved ◆");
   setTimeout(()=>backupToAkashic(),0);
   if (isWatcherReady && currentDiscourseId) {
@@ -5042,6 +5177,8 @@ function applyFormat(cfg){
   else if(cfg.block){if(sel){nt=before+cfg.block+sel+cfg.end+after;cp=start+cfg.block.length+sel.length+cfg.end.length;}else{nt=before+cfg.block+cfg.end+after;cp=start+cfg.block.length;}}
   else if(cfg.line){const ls=before.lastIndexOf('\n')+1;const lp=ta.value.slice(ls,start);if(lp.startsWith(cfg.line)){nt=ta.value.slice(0,ls)+lp.slice(cfg.line.length)+ta.value.slice(start);cp=start-cfg.line.length;}else{nt=ta.value.slice(0,ls)+cfg.line+ta.value.slice(ls);cp=start+cfg.line.length;}}
   ta.value=nt;ta.setSelectionRange(cp,cp);ta.focus();
+    document.getElementById('lh-fmt-sheet')?.classList.remove('open');
+  ta.focus();
 }
 
 function renderContent(raw){
@@ -5060,6 +5197,34 @@ function renderContent(raw){
   t=out.join('\n');bm.forEach((h,i)=>{t=t.replace('%%BL'+i+'%%',h);});cb.forEach((h,i)=>{t=t.replace('%%CB'+i+'%%',h);});ic.forEach((h,i)=>{t=t.replace('%%IC'+i+'%%',h);});
   t=t.replace(/<p><\/p>/g,'');t=t.replace(/<p>%%[A-Z0-9]+%%<\/p>/g,m=>m.slice(3,-4));return t;
 }
+
+function toggleLHOverflow() {
+  const menu = document.getElementById('lh-overflow-menu');
+  menu.classList.toggle('open');
+}
+
+// Close on outside tap
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('.lh-overflow-wrap');
+  if(wrap && !wrap.contains(e.target)){
+    document.getElementById('lh-overflow-menu')?.classList.remove('open');
+  }
+});
+
+function toggleLHFormat() {
+  const sheet = document.getElementById('lh-fmt-sheet');
+  const overflow = document.getElementById('lh-overflow-menu');
+  overflow?.classList.remove('open'); // close overflow if open
+  sheet.classList.toggle('open');
+}
+
+// Close format sheet on outside tap
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('.lh-fmt-wrap');
+  if(wrap && !wrap.contains(e.target)){
+    document.getElementById('lh-fmt-sheet')?.classList.remove('open');
+  }
+});
 
 async function exportHTML(){
   if(!currentDiscourseId)return;
@@ -5578,6 +5743,19 @@ document.getElementById('btn-data-back').addEventListener('click', ()=>{
   saveSupaFromDataPage(); // auto-save on leave
   goBack();
 });
+document.getElementById('btn-lh-overflow').addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleLHOverflow();
+});
+const ta = document.getElementById('content-textarea');
+ta.addEventListener('input', function(){
+  this.style.height = 'auto';
+  this.style.height = Math.max(this.scrollHeight, window.innerHeight * 0.6) + 'px';
+});
+document.getElementById('btn-lh-format').addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleLHFormat();
+});
 document.getElementById('btn-data-export-page').addEventListener('click', ()=>exportJSON());
 document.getElementById('import-json-input-page').onchange = e => importJSON(e);
 document.getElementById('btn-data-sync-page').addEventListener('click', ()=>handleSync());
@@ -5660,6 +5838,10 @@ localStorage.setItem('nq_api_key', document.getElementById('input-api-key').valu
   });
 
 document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="s"){e.preventDefault();if(currentView==='lighthouse')saveCurrentDiscourse();}if(e.key==="Escape"&&currentView==='lighthouse')goBack();if(e.key==="Enter"&&document.getElementById("folder-modal").classList.contains("visible"))confirmNewFolder();if(e.key==="Enter"&&document.getElementById("rename-modal").classList.contains("visible"))confirmRename();if(e.key==="Escape"&&document.getElementById("global-search-modal").classList.contains("visible"))closeGlobalSearch();});
+// Add touch/scroll listeners in DOMContentLoaded
+document.getElementById('view-soup').addEventListener('scroll',resetBottomBarTimer,{passive:true});
+document.getElementById('view-soup').addEventListener('touchstart',resetBottomBarTimer,{passive:true});
+
 document.getElementById('watcher-dot')?.addEventListener('click', openWatcherPanel);
 document.addEventListener('click', (e) => {
   const panel = document.getElementById('watcher-panel');
