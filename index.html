@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.30.3</title>
+<title>NakedQuantum_dev v0.30.4</title>
 <style>
 :root {
   --bg: #000000;
@@ -768,8 +768,7 @@ select.cosm-input {
 .guardian-log-detail.open { transform: translateY(0); }
 .guardian-log-detail-nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--g-border); flex-shrink: 0; }
 .guardian-log-detail-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 28px 24px 80px; font-family: var(--font-serif); font-size: 15px; line-height: 1.9; color: var(--g-text); white-space: pre-wrap; }
-/* GUARDIAN EDGE GLOW -- Apple Intelligence ring */
-/* GUARDIAN EDGE GLOW -- travelling light */
+/* GUARDIAN EDGE GLOW -- Ethereal Aura (Razor Thin) */
 #guardian-edge-glow {
   position: fixed;
   inset: 0;
@@ -777,45 +776,41 @@ select.cosm-input {
   pointer-events: none;
   opacity: 0;
   transition: opacity 1.2s ease;
-  border-radius: 44px;
-  overflow: hidden;
+  
+  /* Absolute pixels (15px) instead of 12% ensures it stays a tight, thin rim of fog */
+  -webkit-mask-image: 
+    linear-gradient(to bottom, #000 0px, transparent 15px, transparent calc(100% - 15px), #000 100%),
+    linear-gradient(to right, #000 0px, transparent 15px, transparent calc(100% - 15px), #000 100%);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
 }
 
 #guardian-edge-glow.active {
   opacity: 1;
 }
 
+/* Tighter spotlight with less blur */
 #guardian-edge-glow::before {
   content: '';
   position: absolute;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(200,160,80,0.5) 0%, rgba(200,160,80,0.15) 40%, transparent 70%);
-  filter: blur(8px);
-  animation: guardianOrbitLight 8s linear infinite;
-}
-
-#guardian-edge-glow::after {
-  content: '';
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(200,160,80,0.3) 0%, transparent 70%);
-  filter: blur(6px);
-  animation: guardianOrbitLight 8s linear infinite;
-  animation-delay: -4s;
+  top: -50%; left: -50%; width: 200%; height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 280deg,
+    rgba(200, 160, 80, 0.1) 320deg,
+    rgba(200, 160, 80, 0.6) 350deg,
+    rgba(255, 255, 255, 0.8) 360deg
+  );
+  /* Reduced blur from 35px to 12px for a much sharper, thinner beam */
+  filter: blur(12px);
+  animation: guardianOrbitLight 6s linear infinite;
 }
 
 @keyframes guardianOrbitLight {
-  0%   { top: -60px;  left: 50%;   transform: translateX(-50%); }
-  25%  { top: 50%;    left: calc(100% - 10px); transform: translateY(-50%); }
-  50%  { top: calc(100% - 10px); left: 50%; transform: translateX(-50%); }
-  75%  { top: 50%;    left: -70px; transform: translateY(-50%); }
-  100% { top: -60px;  left: 50%;   transform: translateX(-50%); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
-
 /* GUARDIAN MODEL SELECTOR -- ghost pill */
 .guardian-model-selector { display: flex; align-items: center; justify-content: center; margin-top: 16px; }
 .guardian-model-pill { background: none; border: none; color: var(--g-muted); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; opacity: 0.4; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: opacity 0.2s; }
