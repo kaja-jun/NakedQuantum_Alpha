@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.1</title>
+<title>NakedQuantum_dev v0.31.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -4227,11 +4227,10 @@ async function handleChatSend(){
   if(!char){ isSending=false; return; }
   let history = await dbGetByIndex('history','charId',activeCharId);
   history = history.map(h=>({...h})).sort((a,b)=>a.created_at-b.created_at);
-
-    try {
-    const response = await callAIForChat(char, history);
+  
+      try {
+    const response = await streamChatResponse(char, history);
     if(response){
-      appendChatMessage('char',response);
       const aiMsgId = 'h_' + crypto.randomUUID();
       await dbPut('history', { id: aiMsgId, charId: activeCharId, role: 'char', content: response, created_at: now+1 });
     }
@@ -4240,6 +4239,7 @@ async function handleChatSend(){
   }
 }
 
+// PRE SUMMARISE FOR GUARDIAN
 async function presSummariseForGuardian(discourseId){
   const d=await getDiscourse(discourseId);
   if(!d||!d.raw_text||d.raw_text.trim().length<30)return;
@@ -4447,7 +4447,7 @@ function openPersonaPillSelector(){
   document.getElementById('cosm-overlay').classList.add('active');
 }
 
-// Notice 'text' is removed from parameters
+// CALL AI FOR CHAT
 async function callAIForChat(char, history){
   const key=await readSecureKey('nq_api_key')||"";
   if(!key){showToast("Add API Key in Settings");return null;}
@@ -4542,6 +4542,113 @@ const model = (activeIE && chip && chip.style.display !== 'none')
     return data.choices?.[0]?.message?.content||null;
   }catch(err){
     console.error(err);
+    showToast("AI network failure ◆");
+    return null;
+  }
+}
+
+// STREAM CHAT
+async function streamChatResponse(char, history) {
+  const key = await readSecureKey('nq_api_key') || "";
+  if(!key){ showToast("Add API Key in Settings"); return null; }
+
+  const memoryContext = await getMemoryContext(char.id);
+  const memoryBlock = memoryContext ? `\n\n[MEMORY FRAGMENTS]\n${memoryContext}` : "";
+  const p = getGlobalPersona();
+  const roles = getPersonaRoles();
+  const roleId = chatPersonaOverride || char.player_role_id || null;
+  const assignedRole = roleId ? roles.find(r => r.id === roleId) : null;
+  const personaBlock = activeIE ? '' : `\n\nPlayer is ${p.bio||'the user'}. ${p.personality?'Personality: '+p.personality+'.':''} ${assignedRole?'In this encounter they are: '+assignedRole.description+'.':''}`;
+
+  let sys;
+  if(activeIE && activeIE.id === char.id){
+    const ieModels = activeIE.model_variants ?
+      (typeof activeIE.model_variants === 'string' ? JSON.parse(activeIE.model_variants) : activeIE.model_variants) : [];
+    const modelNote = ieModels.length ? '\n\nYou were battle-tested with: ' + ieModels.map(m => m.model_id?.split('/').pop()).join(', ') : '';
+    sys = `${activeIE.system_prompt_core || 'You are ' + activeIE.display_name}
+Existential function: ${activeIE.existential_function || 'To be present.'}
+Constraints: ${activeIE.constraints || 'Will not soften. Will not perform.'}
+Voice: ${activeIE.voice_limits || 'As required by truth.'}${modelNote}${memoryBlock}`;
+  } else {
+    sys = `You are ${char.name}. ${char.role}.
+Personality: ${char.personality}.
+Backstory: ${char.backstory}.
+Lore: ${char.lorebook}.
+Scenario: ${char.scenario}.
+Inclination: ${char.inclination}.
+Relationships: ${char.relationships}.
+Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
+  }
+
+  const sortedHistory = [...history].sort((a,b) => a.created_at - b.created_at).slice(-12);
+  let safeMsgs = [];
+  for(const h of sortedHistory){
+    const role = h.role === 'user' ? 'user' : 'assistant';
+    const content = h.content ? h.content.trim() : "...";
+    if(!content) continue;
+    if(safeMsgs.length > 0 && safeMsgs[safeMsgs.length-1].role === role){
+      safeMsgs[safeMsgs.length-1].content += "\n\n" + content;
+    } else {
+      safeMsgs.push({role, content});
+    }
+  }
+  if(safeMsgs.length > 0 && safeMsgs[0].role !== 'user') safeMsgs.shift();
+
+  const chip = document.getElementById('ie-model-chip');
+  const model = (activeIE && chip && chip.style.display !== 'none')
+    ? (JSON.parse(chip.dataset.models || '[]')[parseInt(chip.dataset.idx || '0')]?.model_id || localStorage.getItem("nq_model") || "deepseek/deepseek-v4-flash")
+    : (localStorage.getItem("nq_model") || "deepseek/deepseek-v4-flash");
+
+  const msgs = [{role:'system', content:sys}, ...safeMsgs];
+
+  // Create streaming message bubble
+  const c = document.getElementById('chat-messages');
+  const m = document.createElement('div');
+  m.className = 'chat-msg char';
+  m.textContent = '';
+  c.appendChild(m);
+  c.scrollTop = c.scrollHeight;
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://nakedquantum.com",
+        "X-Title": "NakedQuantum"
+      },
+      body: JSON.stringify({model, messages: msgs, stream: true, temperature: char.temperature || 1.0})
+    });
+
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while(true){
+      const chunk = await reader.read();
+      if(chunk.done) break;
+      const lines = decoder.decode(chunk.value, {stream:true}).split('\n').filter(l => l.indexOf('data: ') === 0);
+      for(const line of lines){
+        const raw = line.slice(6).trim();
+        if(raw === '[DONE]') break;
+        try {
+          const parsed = JSON.parse(raw);
+          const token = parsed.choices?.[0]?.delta?.content || '';
+          fullText += token;
+          m.textContent = fullText;
+          c.scrollTop = c.scrollHeight;
+        } catch(e){}
+      }
+    }
+
+    return fullText || null;
+
+  } catch(err){
+    console.error(err);
+    m.remove(); // remove empty bubble on error
     showToast("AI network failure ◆");
     return null;
   }
