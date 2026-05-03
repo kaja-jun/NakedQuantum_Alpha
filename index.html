@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.6</title>
+<title>NakedQuantum_dev v0.31.7</title>
 <style>
 :root {
   --bg: #000000;
@@ -1159,8 +1159,8 @@ select.cosm-input {
     </div>
     <p style="font-size:9px;color:var(--muted);margin:6px 0 0 18px;" id="watcher-detail"></p>
     <div style="margin-top:12px;display:flex;gap:8px;">
-      <button onclick="devForcePass()" style="background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Force Pass</button>
-      <button onclick="devClearWatcher()" style="background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Clear Index</button>
+          <button onclick="devForcePass()" id="btn-dev-force-pass" style="display:none;background:var(--surface2);color:var(--accent);border:1px solid var(--accent-dim);flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Force Pass</button>
+      <button onclick="devClearWatcher()" id="btn-dev-clear-watcher" style="display:none;background:#1a0000;color:var(--danger);border:1px solid #330000;flex:1;height:36px;border-radius:8px;font-weight:900;font-size:10px;letter-spacing:1px;">Clear Index</button>
     </div>
 
   </div>
@@ -2234,13 +2234,13 @@ async function devClearWatcher() {
 
 /* ── WATCHER GOLD DOT UI ───────────────────────────────────── */
 const WATCHER_ANCHORS = [
-  { top: '72px',  left: '50%'  },
-  { top: '72px',  right: '52px' },
+  { top: '175px',  left: '50%'  },
+  { top: '175px',  right: '20px' },
   { top: '30%',   right: '16px' },
   { top: '50%',   right: '16px' },
   { top: '70%',   right: '16px' },
-  { top: '30%',   left: '40px' },
-  { top: '50%',   left: '40px' },
+  { top: '30%',   left: '20px' },
+  { top: '50%',   left: '20px' },
   { bottom: '115px', left: '50%' },
 ];
 
@@ -5966,7 +5966,9 @@ async function bootApp() {
   if (DEV_MODE) {
   try {
     document.getElementById('lock-screen').style.display = 'none';
-    await init();
+        await init();
+    document.getElementById('btn-dev-force-pass').style.display = 'flex';
+    document.getElementById('btn-dev-clear-watcher').style.display = 'flex';
   } catch(e) {
     console.error('DEV boot failed:', e);
     alert('Boot error: ' + e.message);
