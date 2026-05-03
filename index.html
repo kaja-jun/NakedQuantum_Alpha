@@ -1147,16 +1147,16 @@ select.cosm-input {
         </div>
       </div>
     </div>
-    <div class="lighthouse-scroll">
+      <div class="lighthouse-scroll">
       <div class="lighthouse-inner">
-        <input class="discourse-title-input" id="discourse-title" placeholder="Untitled Discourse" spellcheck="false">
         <div class="discourse-meta" id="discourse-meta"></div>
+        <input class="discourse-title-input" id="discourse-title" placeholder="Untitled..." spellcheck="false" style="display:none;">
         <div class="extract-loading" id="extract-loading">
           <div class="extract-dot"></div><div class="extract-dot"></div><div class="extract-dot"></div>
           <span>Extracting anchors...</span>
         </div>
         <div id="mosaic-display"></div>
-        <textarea class="content-textarea" id="content-textarea" placeholder="Begin writing..."></textarea>
+              <textarea class="content-textarea" id="content-textarea" placeholder="Title&#10;&#10;Begin writing..."></textarea>
         <div class="content-view" id="content-view"></div>
       </div>
     </div>
@@ -3960,8 +3960,10 @@ async function openDiscourse(id){
   currentDiscourseId=id;
     // ---> SENSEI'S INCISION: Silent Attention Bump
   await dbPut("cosm_discourses", {...disc, updated_at: Date.now()}); 
-  document.getElementById("discourse-title").value=disc.title||"";
-  document.getElementById("content-textarea").value=disc.raw_text||"";
+  document.getElementById("discourse-title").value = disc.title || "";
+const existingTitle = disc.title && disc.title !== "Untitled Discourse" ? disc.title : "";
+const ta = document.getElementById("content-textarea");
+ta.value = existingTitle ? existingTitle + "\n\n" + (disc.raw_text || "") : (disc.raw_text || "");
   document.getElementById("content-textarea").value = disc.raw_text || "";
 // Trigger auto-height after content loads
 setTimeout(() => {
@@ -4018,8 +4020,11 @@ async function handleNewChronicle() {
 
 async function saveCurrentDiscourse(silent=false){
   if(!currentDiscourseId)return;
-  const title=document.getElementById("discourse-title").value.trim()||"Untitled Discourse";
-  const raw_text=document.getElementById("content-textarea").value;
+  const ta = document.getElementById("content-textarea");
+const lines = ta.value.split("\n");
+const title = lines[0].trim() || "Untitled";
+const raw_text = lines.slice(2).join("\n"); // skip title line and blank line
+document.getElementById("discourse-title").value = title;
   const ind = document.getElementById('lh-save-indicator');
   if(ind){ ind.textContent='◆ saving'; ind.className='lh-save-indicator saving'; }
   await updateDiscourse(currentDiscourseId,{title,raw_text});
