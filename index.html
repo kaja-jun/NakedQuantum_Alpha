@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.5</title>
+<title>NakedQuantum_dev v0.31.6</title>
 <style>
 :root {
   --bg: #000000;
@@ -678,6 +678,71 @@ button {
   color: var(--accent-dim);
   text-transform: uppercase;
   text-align: center;
+}
+
+/* IE ENCOUNTER MODE */
+.ie-encounter .chat-messages {
+  padding: 24px 20px 120px;
+}
+
+/* User message in IE -- smaller, stepped back, right */
+.ie-encounter .chat-msg.user {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+  text-align: right;
+  padding: 0 0 0 40px;
+  margin: 0 0 8px;
+  border-radius: 0;
+  max-width: 100%;
+  align-self: flex-end;
+  line-height: 1.6;
+}
+
+/* Separator line between exchanges */
+.ie-encounter .chat-msg.user::after {
+  content: '';
+  display: block;
+  height: 1px;
+  background: var(--border);
+  margin-top: 20px;
+  opacity: 0.4;
+}
+
+/* IE entity response -- full width, weighted, no bubble */
+.ie-encounter .chat-msg.char {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 15px;
+  font-family: var(--font-serif);
+  line-height: 1.9;
+  padding: 20px 0 8px;
+  border-radius: 0;
+  max-width: 100%;
+  align-self: flex-start;
+}
+
+/* IE header -- entity name larger, no persona pill */
+.ie-encounter .chat-char-name {
+  font-size: 15px;
+  letter-spacing: 2px;
+  font-weight: 900;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+/* IE input -- different placeholder feel */
+.ie-encounter .chat-input {
+  font-style: italic;
+  font-size: 14px;
+}
+
+/* IE send button label */
+.ie-encounter #btn-send::after {
+  content: '';
 }
 
 /* SANCTUARY DIVIDER */
@@ -2492,10 +2557,13 @@ async function openIEChat(id){
   const ie = await getImmutableEntity(id);
   if(!ie) return;
   // Reset stuck send state on every entry
-  isSending = false;
-  
+    isSending = false;
   activeCharId = id;
-  activeIE = ie; // Store the IE data for chat context
+  activeIE = ie;
+  document.getElementById('view-chat').classList.add('ie-encounter');
+  document.getElementById('chat-input').placeholder = 'Speak with intention...';
+  document.getElementById('chat-persona-pill').style.display = 'none';
+  document.getElementById('btn-chat-edit').style.display = 'none';
 
   // Use display_name for the chat header
   document.getElementById('chat-char-name').textContent = ie.display_name || 'Unnamed';
@@ -4340,11 +4408,13 @@ async function openChat(id){
   const ieCheck = await getImmutableEntity(id);
   if(ieCheck && ieCheck.signature){ openIEBottomSheet(id); return; }
   if(ieCheck && !ieCheck.signature){ showToast('◈ Draft -- go to ∞ page to forge'); return; }
-  
   // Reset IE state -- critical to prevent bleed from IE chat
-  activeIE = null;
-  isSending = false; // reset any stuck send state
-  
+    activeIE = null;
+  isSending = false;
+  document.getElementById('view-chat').classList.remove('ie-encounter');
+  document.getElementById('chat-input').placeholder = 'Send a message...';
+  document.getElementById('chat-persona-pill').style.display = '';
+  document.getElementById('btn-chat-edit').style.display = '';// reset any stuck send state
   activeCharId = id;
   const c = await getCharacter(id);
   document.getElementById('chat-char-name').textContent = c.name;
