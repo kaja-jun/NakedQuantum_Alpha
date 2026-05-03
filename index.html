@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.4</title>
+<title>NakedQuantum_dev v0.31.5</title>
 <style>
 :root {
   --bg: #000000;
@@ -3963,7 +3963,6 @@ async function openDiscourse(id){
   document.getElementById("discourse-title").value = disc.title || "";
 const existingTitle = disc.title && disc.title !== "Untitled Discourse" ? disc.title : "";
 const ta = document.getElementById("content-textarea");
-ta.value = existingTitle ? existingTitle + "\n\n" + (disc.raw_text || "") : (disc.raw_text || "");
   document.getElementById("content-textarea").value = disc.raw_text || "";
 // Trigger auto-height after content loads
 setTimeout(() => {
@@ -3971,8 +3970,25 @@ setTimeout(() => {
   ta.style.height = 'auto';
   ta.style.height = Math.max(ta.scrollHeight, window.innerHeight * 0.6) + 'px';
 }, 50);
-  await renderMeta(disc);await renderMosaicDisplay(id);
-setEditorMode('write');showPanel('view-lighthouse');
+  await renderMeta(disc); await renderMosaicDisplay(id);
+
+// Chronicle vs Discourse feel
+const ta2 = document.getElementById('content-textarea');
+const lhInner = document.querySelector('.lighthouse-inner');
+if(disc.item_type === 'chronicle'){
+  ta2.placeholder = 'What was brought in from outside...\n\nPaste, transcribe, or write what arrived from elsewhere.';
+  if(lhInner) lhInner.style.borderLeft = '2px solid var(--accent-dim)';
+  if(lhInner) lhInner.style.paddingLeft = '18px';
+} else if(disc.item_type === 'note'){
+  ta2.placeholder = 'A spark...\n\nWrite fast. Don\'t construct.';
+  if(lhInner) lhInner.style.borderLeft = 'none';
+  if(lhInner) lhInner.style.paddingLeft = '0';
+} else {
+  ta2.placeholder = 'Title\n\nBegin writing...';
+  if(lhInner) lhInner.style.borderLeft = 'none';
+  if(lhInner) lhInner.style.paddingLeft = '0';
+}
+setEditorMode('write'); showPanel('view-lighthouse');
   if(disc.folder_id&&currentFolderId!==disc.folder_id){const f=await dbGet("cosm_folders",disc.folder_id);if(f){breadcrumbPath=[{id:null,name:'◈ The Soup'},{id:disc.folder_id,name:f.name}];currentFolderId=disc.folder_id;}}
 }
 
