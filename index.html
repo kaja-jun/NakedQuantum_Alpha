@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.8</title>
+<title>NakedQuantum_dev v0.31.9</title>
 <style>
 :root {
   --bg: #000000;
@@ -4168,22 +4168,31 @@ async function handleNewChronicle() {
 
 async function saveCurrentDiscourse(silent=false){
   if(!currentDiscourseId)return;
+  
   const ta = document.getElementById("content-textarea");
-const lines = ta.value.split("\n");
-const title = lines[0].trim() || "Untitled";
-const raw_text = lines.slice(2).join("\n"); // skip title line and blank line
-document.getElementById("discourse-title").value = title;
+  const lines = ta.value.split("\n");
+  const title = lines[0].trim() || "Untitled";
+  
+  // SENSEI FIX: Slice from 1 to keep everything after title, then trim leading whitespace
+  // This prevents deleting your first sentence if you didn't leave a blank line.
+  const raw_text = lines.slice(1).join("\n").replace(/^\s+/, ''); 
+  
+  document.getElementById("discourse-title").value = title;
   const ind = document.getElementById('lh-save-indicator');
   if(ind){ ind.textContent='◆ saving'; ind.className='lh-save-indicator saving'; }
+  
   await updateDiscourse(currentDiscourseId,{title,raw_text});
+  
   if(ind){ ind.textContent='◆ saved'; ind.className='lh-save-indicator visible'; setTimeout(()=>{ ind.className='lh-save-indicator'; },2000); }
   if(!silent)showToast("Saved ◆");
   setTimeout(()=>backupToAkashic(),0);
+  
   if (isWatcherReady && currentDiscourseId) {
     const disc = await getDiscourse(currentDiscourseId);
     if (disc && disc.item_type) queueWatcherEmbed(currentDiscourseId, title, raw_text, disc.item_type);
-    // Background pre-summarise for Guardian -- non-blocking
-setTimeout(()=>presSummariseForGuardian(currentDiscourseId),2000);
+    
+    // Call the Cartographer with the new debounced queue
+    triggerCartographer(currentDiscourseId);
   }
 }
 
@@ -4529,43 +4538,135 @@ async function handleChatSend(){
   }
 }
 
-// PRE SUMMARISE FOR GUARDIAN
-async function presSummariseForGuardian(discourseId){
-  const d=await getDiscourse(discourseId);
-  if(!d||!d.raw_text||d.raw_text.trim().length<30)return;
-  const key=await readSecureKey('nq_api_key')||'';
-  if(!key)return;
-  const existing=await dbGet('guardian_summaries',discourseId);
-  // Skip if already summarised and not updated since
-  if(existing&&existing.updated_at>=d.updated_at)return;
-  const wordCount=d.raw_text.trim().split(/\s+/).filter(Boolean).length;
-  if(wordCount<30)return;
-  try{
-    const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'deepseek/deepseek-v4-flash',
-        max_tokens:300,
-        messages:[
-          {role:'system',content:'Precise summariser. One dense paragraph, max 100 words. Core themes, tensions, emotional texture. No preamble.'},
-          {role:'user',content:`Title: ${d.title}\n\n${d.raw_text.slice(0,2000)}`}
-        ]
-      })
-    });
-    const data=await res.json();
-    const summary=data.choices?.[0]?.message?.content?.trim()||d.raw_text.slice(0,200);
-    await dbPut('guardian_summaries',{
-      id:discourseId,
-      discourse_id:discourseId,
-      summary,
-      word_count:wordCount,
-      created_at:Date.now(),
-      updated_at:Date.now()
-    });
-  }catch(e){}
+// ── THE LIGHTHOUSE CARTOGRAPHER ──────────────────────────────────────────────
+let _cartographerTimers = {};
+let _cartographerLocks = {};
+
+function triggerCartographer(discourseId) {
+  if (_cartographerTimers[discourseId]) clearTimeout(_cartographerTimers[discourseId]);
+  // 3-second silence delay. Completely asynchronous, never blocks UI.
+  _cartographerTimers[discourseId] = setTimeout(() => runCartographer(discourseId), 3000);
 }
 
+async function runCartographer(discourseId) {
+  if (_cartographerLocks[discourseId]) return;
+  _cartographerLocks[discourseId] = true;
+
+  try {
+    const d = await getDiscourse(discourseId);
+    if (!d || !d.raw_text) return;
+
+    const words = d.raw_text.trim().split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+    if (wordCount < 30) return; // Too shallow to map
+
+    const existing = await dbGet('guardian_summaries', discourseId);
+    // Rule: Skip if already summarized and word count is exactly the same
+    if (existing && existing.summary && existing.word_count === wordCount) {
+      return; 
+    }
+
+    let finalSummary = '';
+
+    if (wordCount <= 300) {
+      // Under 300 words: The map is the territory. No API call needed.
+      finalSummary = d.raw_text.trim();
+    } else {
+      const key = await readSecureKey('nq_api_key') || '';
+      if (!key) {
+        console.warn("Cartographer: No API key found. Silently aborting.");
+        return;
+      }
+
+      // Dynamic Fallback Cascade
+      const userCartoModel = localStorage.getItem('nq_cartographer_model');
+      const globalModel = localStorage.getItem('nq_model');
+      
+      const rawFallbackModels =[
+        userCartoModel,
+        'deepseek/deepseek-v4-flash',
+        'google/gemini-2.5-flash-lite',
+        globalModel
+      ];
+      
+      // Use Set to remove duplicates (e.g. if globalModel is deepseek-v4-flash, it only tries once)
+      const fallbackModels =[...new Set(rawFallbackModels.filter(Boolean))];
+
+      async function mapTerritory(textPayload) {
+        for (const model of fallbackModels) {
+          try {
+            const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${key}`, 
+                'Content-Type': 'application/json', 
+                'HTTP-Referer': 'https://nakedquantum.com', 
+                'X-Title': 'NakedQuantum'
+              },
+              body: JSON.stringify({
+                model: model,
+                max_tokens: 300,
+                messages:[
+                  {
+                    role: 'system', 
+                    content: 'You are the Cartographer of the Abyss. Compress this text into one dense paragraph (max 100 words). Map the core themes, unresolved tensions, and emotional texture. Do not categorize. Do not list. No preamble. Pure insight.'
+                  },
+                  {role: 'user', content: textPayload}
+                ]
+              })
+            });
+            
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
+            const data = await res.json();
+            const text = data.choices?.[0]?.message?.content?.trim();
+            if (text) return text;
+          } catch (e) {
+            // Logs failures to console only, no toasts.
+            console.warn(`Cartographer: ${model} failed, stepping down...`, e.message);
+          }
+        }
+        console.warn("Cartographer: All fallback models failed.");
+        return null;
+      }
+
+      if (wordCount <= 10000) {
+        finalSummary = await mapTerritory(`Title: ${d.title}\n\n${d.raw_text}`);
+      } else {
+        // Massive Text: Map-Reduce Chunking
+        const chunkSize = 4000;
+        let chunks =[];
+        
+        for (let i = 0; i < words.length; i += chunkSize) {
+          const chunkText = words.slice(i, i + chunkSize).join(' ');
+          const chunkSum = await mapTerritory(`Title: ${d.title} (Part ${Math.floor(i/chunkSize)+1})\n\n${chunkText}`);
+          if (chunkSum) chunks.push(chunkSum);
+        }
+        
+        if (chunks.length > 0) {
+          finalSummary = await mapTerritory(`Title: ${d.title} (Master Map)\n\nCombine these map fragments into one final 100-word dense emotional cartography:\n\n${chunks.join('\n\n')}`);
+        }
+      }
+    }
+
+    if (finalSummary) {
+      await dbPut('guardian_summaries', {
+        id: discourseId,
+        discourse_id: discourseId,
+        summary: finalSummary,
+        word_count: wordCount,
+        created_at: existing ? existing.created_at : Date.now(),
+        updated_at: Date.now()
+      });
+      console.log(`◈ Cartographer mapped engram: ${discourseId} (${wordCount} words)`);
+    }
+  } catch (err) {
+    console.error("Cartographer encountered a fatal error:", err);
+  } finally {
+    _cartographerLocks[discourseId] = false;
+    delete _cartographerTimers[discourseId];
+  }
+}
 
 async function summariseHistory(charId,messages){
   const key=await readSecureKey('nq_api_key')||"";
