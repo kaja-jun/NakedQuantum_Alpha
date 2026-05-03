@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.7</title>
+<title>NakedQuantum_dev v0.31.8</title>
 <style>
 :root {
   --bg: #000000;
@@ -2923,6 +2923,21 @@ const WA_CRED_KEY = 'nq_prf_cred_id';
 function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
 function b64ToBuf(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)).buffer; }
 
+async function wrapSovereignKey(currentSKBytes, prfKeyBytes) {
+  const key = await crypto.subtle.importKey('raw', prfKeyBytes, {name: 'AES-GCM', length: 256}, false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, currentSKBytes);
+  return JSON.stringify({ iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) });
+}
+
+// CRYPTOGRAPHIC WRAPPERS
+async function unwrapSovereignKey(wrappedJson, prfKeyBytes) {
+  const { iv, ct } = JSON.parse(wrappedJson);
+  const key = await crypto.subtle.importKey('raw', prfKeyBytes, {name: 'AES-GCM', length: 256}, false, ['decrypt']);
+  const dec = await crypto.subtle.decrypt({name: 'AES-GCM', iv: new Uint8Array(iv)}, key, new Uint8Array(ct));
+  return new Uint8Array(dec);
+}
+
 async function unlockWithPRF(){
   const stored = localStorage.getItem(WA_CRED_KEY);
   try {
@@ -2934,15 +2949,29 @@ async function unlockWithPRF(){
         timeout: 60000
       }
     };
-    if(stored) opts.publicKey.allowCredentials = [{ id: b64ToBuf(stored), type: 'public-key' }];
+    if(stored) opts.publicKey.allowCredentials =[{ id: b64ToBuf(stored), type: 'public-key' }];
 
     const assertion = await navigator.credentials.get(opts);
     const ext = assertion.getClientExtensionResults();
 
-   if(ext.prf?.results?.first){
-      const keyBytes = new Uint8Array(ext.prf.results.first);
-      setSovereignKey(keyBytes); // Capture in RAM for backup
-      await setEncryptionKey(keyBytes);
+    if(ext.prf?.results?.first){
+      let prfKey = new Uint8Array(ext.prf.results.first);
+      let finalKey = prfKey;
+      
+      // If we find a wrapped key, Face ID is acting as a wrapper. Unpack it.
+      const wrapped = localStorage.getItem('nq_wrapped_sk');
+      if (wrapped) {
+        try {
+          finalKey = await unwrapSovereignKey(wrapped, prfKey);
+        } catch(e) {
+          console.error("Failed to unwrap SK. PRF key mismatch.", e);
+          showToast('⚠ Face ID Key mismatch');
+          return false;
+        }
+      }
+      
+      setSovereignKey(finalKey); // Capture in RAM for backup/sync
+      await setEncryptionKey(finalKey);
       showToast('Sovereign key active ◆');
       return true;
     }
@@ -2954,7 +2983,7 @@ async function unlockWithPRF(){
             challenge: crypto.getRandomValues(new Uint8Array(32)),
             rp: { name: 'NakedQuantum', id: location.hostname },
             user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'kaja', displayName: 'Kaja' },
-            pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+            pubKeyCredParams:[{ alg: -7, type: 'public-key' }],
             authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required' },
             extensions: { prf: { eval: { first: getPRFSalt() } } },
             timeout: 60000
@@ -2972,28 +3001,63 @@ async function unlockWithPRF(){
   return false;
 }
 
-// ADD this new function:
+// WEBAUTHN RESET
 async function resetWebAuthnRegistration() {
-  if (!confirm('This will clear your Face ID registration. You will need to re-register on next unlock. Continue?')) return;
-  localStorage.removeItem('nq_prf_cred_id');
-  localStorage.removeItem('nq_prf_salt'); // if you implemented Fix 2
-  showToast('◈ Face ID cleared -- will re-register on next unlock');
-}
-
-let _sovereignKeyBytes = null;
-function getSovereignKey() { return _sovereignKeyBytes; }
-function setSovereignKey(bytes) { _sovereignKeyBytes = bytes; }
-function clearSovereignKey() { _sovereignKeyBytes = null; }
-
-function showSovereignKey() {
-  if(!getSovereignKey()) { showToast("Unlock Abyss first ◆"); return; }
-const b64 = bufToB64(getSovereignKey());
-  const displayInput = document.getElementById('export-key-display');
-  displayInput.value = b64;
-  displayInput.style.display = 'block';
-  displayInput.select();
-  document.execCommand('copy'); // Auto-copy to clipboard
-  showToast("Key Copied. Guard it with your life.");
+  const currentSK = getSovereignKey();
+  if (!currentSK) {
+    showToast('⚠ No active Sovereign Key. Unlock Abyss first.');
+    return;
+  }
+  
+  if (!confirm('This will bind a new Face ID to your existing Sovereign Key. You will be prompted to authenticate now. Continue?')) return;
+  
+  try {
+    // 1. Generate a brand new salt
+    const newSalt = crypto.getRandomValues(new Uint8Array(32));
+    localStorage.setItem('nq_prf_salt', bufToB64(newSalt.buffer));
+    
+    // 2. Create the new credential
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: 'NakedQuantum', id: location.hostname },
+        user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'kaja', displayName: 'Kaja' },
+        pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required' },
+        extensions: { prf: { eval: { first: newSalt.buffer } } },
+        timeout: 60000
+      }
+    });
+    
+    localStorage.setItem(WA_CRED_KEY, bufToB64(cred.rawId));
+    
+    // 3. Immediately assert to get the new PRF output
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        userVerification: 'required',
+        allowCredentials: [{ id: cred.rawId, type: 'public-key' }],
+        extensions: { prf: { eval: { first: newSalt.buffer } } },
+        timeout: 60000
+      }
+    });
+    
+    const ext = assertion.getClientExtensionResults();
+    if (ext.prf?.results?.first) {
+      const newPrfKey = new Uint8Array(ext.prf.results.first);
+      
+      // 4. Wrap the existing Sovereign Key with the new PRF key
+      const wrapped = await wrapSovereignKey(currentSK, newPrfKey);
+      localStorage.setItem('nq_wrapped_sk', wrapped);
+      
+      showToast('◈ Face ID Re-bound Safely');
+    } else {
+      throw new Error('PRF verification failed on bind');
+    }
+  } catch (e) {
+    console.error("Bind failed:", e);
+    showToast('⚠ Face ID update failed or was cancelled.');
+  }
 }
 
 async function unlockWithFallbackKey() {
