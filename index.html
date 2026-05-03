@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.31.9</title>
+<title>NakedQuantum_dev v0.32</title>
 <style>
 :root {
   --bg: #000000;
@@ -1372,6 +1372,12 @@ select.cosm-input {
     </button>
   </div>
   <div class="chat-input-area">
+  <!-- NEW: Retry / Regenerate Button -->
+  <button class="btn-send" id="btn-chat-retry" style="display:none; background:var(--surface2); color:var(--text); border:1px solid var(--border); font-size:16px;">↻</button>
+  
+  <textarea class="chat-input" id="chat-input" placeholder="Send a message..." rows="1"></textarea>
+  <button class="btn-send" id="btn-send">⇡</button>
+</div>
     <textarea class="chat-input" id="chat-input" placeholder="Send a message..." rows="1"></textarea>
    <button class="btn-send" id="btn-send">⇡</button>
   </div>
@@ -2596,7 +2602,7 @@ if(chip && ieModels.length > 0){
   // Persona -- IEs don't have player_role_id, use default
   chatPersonaOverride = null;
   updatePersonaPill();
-  
+  await updateChatRetryButton();
   showPanel('view-chat');
 }
 
@@ -4505,36 +4511,97 @@ if(bar) bar.style.display = 'none';
   history.forEach(h => appendChatMessage(h.role, h.content));
   chatPersonaOverride = c.player_role_id || null;
   updatePersonaPill();
+  await updateChatRetryButton();
   showPanel('view-chat');
 }
 
+// UI Helper: The Abyss Rule - No Regrets.
+async function updateChatRetryButton() {
+  const retryBtn = document.getElementById('btn-chat-retry');
+  if (!retryBtn) return;
+  if (isSending || !activeCharId) {
+    retryBtn.style.display = 'none';
+    return;
+  }
+  
+  const history = await dbGetByIndex('history', 'charId', activeCharId);
+  if (history.length === 0) {
+    retryBtn.style.display = 'none';
+    return;
+  }
+  
+  history.sort((a,b) => a.created_at - b.created_at);
+  const lastMsg = history[history.length - 1];
+
+  // Only show retry if the API failed (the last message is still the user's)
+  retryBtn.style.display = (lastMsg.role === 'user') ? 'flex' : 'none';
+}
+
 let isSending = false;
-async function handleChatSend(){
-  if(isSending) return;
-  isSending = true;
+let chatAbortController = null;
+
+async function handleChatSend(isRetry = false) {
+  if (typeof isRetry !== 'boolean') isRetry = false;
+
+  // 1. THE KILL SWITCH
+  if (isSending) {
+    if (chatAbortController) chatAbortController.abort();
+    return;
+  }
+
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
-  if(!text ||!activeCharId){ isSending=false; return; }
-  input.value=''; input.style.height='auto';
-  appendChatMessage('user',text);
 
-  const now = Date.now();
-  // THE FIX: Generating a highly unique string ID to prevent sync collisions
-  const userMsgId = 'h_' + crypto.randomUUID();
-  await dbPut('history', { id: userMsgId, charId: activeCharId, role: 'user', content: text, created_at: now });
-    const char = activeIE ? activeIE : await getCharacter(activeCharId);
-  if(!char){ isSending=false; return; }
-  let history = await dbGetByIndex('history','charId',activeCharId);
-  history = history.map(h=>({...h})).sort((a,b)=>a.created_at-b.created_at);
+  let history = await dbGetByIndex('history', 'charId', activeCharId);
+  history.sort((a,b) => a.created_at - b.created_at);
+
+  // 2. NETWORK RETRY OR NEW MESSAGE
+  if (isRetry) {
+    // Double-check that we are actually in a failed state
+    if (!history.length || history[history.length - 1].role !== 'user') return;
+  } else {
+    if (!text || !activeCharId) return;
+    input.value = ''; 
+    input.style.height = 'auto';
+    appendChatMessage('user', text);
+
+    const now = Date.now();
+    const userMsgId = 'h_' + crypto.randomUUID();
+    await dbPut('history', { id: userMsgId, charId: activeCharId, role: 'user', content: text, created_at: now });
+    history.push({ id: userMsgId, charId: activeCharId, role: 'user', content: text, created_at: now });
+  }
+
+  const char = activeIE ? activeIE : await getCharacter(activeCharId);
+  if (!char) return;
+
+  // 3. LOCK THE UI & ARM THE ABORT CONTROLLER
+  isSending = true;
+  const sendBtn = document.getElementById('btn-send');
+  sendBtn.textContent = '✕';
+  sendBtn.style.background = 'var(--danger)';
+  sendBtn.style.color = '#fff';
   
-      try {
-    const response = await streamChatResponse(char, history);
-    if(response){
+  const retryBtn = document.getElementById('btn-chat-retry');
+  if (retryBtn) retryBtn.style.display = 'none';
+
+  chatAbortController = new AbortController();
+
+  try {
+    const response = await streamChatResponse(char, history, chatAbortController.signal);
+    if (response && response.trim()) {
       const aiMsgId = 'h_' + crypto.randomUUID();
-      await dbPut('history', { id: aiMsgId, charId: activeCharId, role: 'char', content: response, created_at: now+1 });
+      await dbPut('history', { id: aiMsgId, charId: activeCharId, role: 'char', content: response.trim(), created_at: Date.now() });
     }
+  } catch (e) {
+    if (e.name !== 'AbortError') console.error(e);
   } finally {
+    // 4. UNLOCK UI & ASSESS STATE
     isSending = false;
+    chatAbortController = null;
+    sendBtn.textContent = '⇡';
+    sendBtn.style.background = 'var(--accent)';
+    sendBtn.style.color = '#000';
+    updateChatRetryButton(); // This will show the retry button ONLY if it failed again
   }
 }
 
@@ -4939,7 +5006,8 @@ const model = (activeIE && chip && chip.style.display !== 'none')
 }
 
 // STREAM CHAT
-async function streamChatResponse(char, history) {
+// Add 'signal' to the parameters
+async function streamChatResponse(char, history, signal) {
   const key = await readSecureKey('nq_api_key') || "";
   if(!key){ showToast("Add API Key in Settings"); return null; }
 
@@ -4954,7 +5022,7 @@ async function streamChatResponse(char, history) {
   let sys;
   if(activeIE && activeIE.id === char.id){
     const ieModels = activeIE.model_variants ?
-      (typeof activeIE.model_variants === 'string' ? JSON.parse(activeIE.model_variants) : activeIE.model_variants) : [];
+      (typeof activeIE.model_variants === 'string' ? JSON.parse(activeIE.model_variants) : activeIE.model_variants) :[];
     const modelNote = ieModels.length ? '\n\nYou were battle-tested with: ' + ieModels.map(m => m.model_id?.split('/').pop()).join(', ') : '';
     sys = `${activeIE.system_prompt_core || 'You are ' + activeIE.display_name}
 Existential function: ${activeIE.existential_function || 'To be present.'}
@@ -4972,7 +5040,7 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
   }
 
   const sortedHistory = [...history].sort((a,b) => a.created_at - b.created_at).slice(-12);
-  let safeMsgs = [];
+  let safeMsgs =[];
   for(const h of sortedHistory){
     const role = h.role === 'user' ? 'user' : 'assistant';
     const content = h.content ? h.content.trim() : "...";
@@ -4990,15 +5058,17 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     ? (JSON.parse(chip.dataset.models || '[]')[parseInt(chip.dataset.idx || '0')]?.model_id || localStorage.getItem("nq_model") || "deepseek/deepseek-v4-flash")
     : (localStorage.getItem("nq_model") || "deepseek/deepseek-v4-flash");
 
-  const msgs = [{role:'system', content:sys}, ...safeMsgs];
+  const msgs =[{role:'system', content:sys}, ...safeMsgs];
 
-  // Create streaming message bubble
   const c = document.getElementById('chat-messages');
   const m = document.createElement('div');
   m.className = 'chat-msg char';
-  m.textContent = '';
+  m.textContent = '...'; // Little thinking indicator
   c.appendChild(m);
   c.scrollTop = c.scrollHeight;
+
+  // We declare fullText outside the try block so the catch block can return it if aborted
+  let fullText = '';
 
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -5009,14 +5079,15 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
         "HTTP-Referer": "https://nakedquantum.com",
         "X-Title": "NakedQuantum"
       },
-      body: JSON.stringify({model, messages: msgs, stream: true, temperature: char.temperature || 1.0})
+      body: JSON.stringify({model, messages: msgs, stream: true, temperature: char.temperature || 1.0}),
+      signal: signal // INJECT ABORT SIGNAL HERE
     });
 
     if(!res.ok) throw new Error('HTTP ' + res.status);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let fullText = '';
+    m.textContent = ''; // clear thinking indicator
 
     while(true){
       const chunk = await reader.read();
@@ -5038,10 +5109,14 @@ Respond in character, concise and evocative.${personaBlock}${memoryBlock}`;
     return fullText || null;
 
   } catch(err){
+    // If we deliberately killed it, keep whatever text it managed to write
+    if (err.name === 'AbortError') {
+      return fullText || null; 
+    }
     console.error(err);
-    m.remove(); // remove empty bubble on error
+    if (!fullText) m.remove(); // only delete the bubble if it failed before writing anything
     showToast("AI network failure ◆");
-    return null;
+    return fullText || null;
   }
 }
 
@@ -5049,7 +5124,15 @@ function appendChatMessage(role,text){
   const c=document.getElementById('chat-messages');const m=document.createElement('div');m.className=`chat-msg ${role==='user'?'user':'char'}`;m.textContent=text;c.appendChild(m);c.scrollTop=c.scrollHeight;
 }
 
-async function clearChatHistory(){if(!activeCharId||!confirm("Clear chat history?"))return;const h=await dbGetByIndex('history','charId',activeCharId);for(const x of h)await dbDelete('history',x.id);document.getElementById('chat-messages').innerHTML='';showToast("History cleared");}
+async function clearChatHistory(){
+if(!activeCharId||!confirm("Clear chat history?"))
+return;
+const h=await dbGetByIndex('history','charId',activeCharId);
+for(const x of h)await dbDelete('history',x.id);
+document.getElementById('chat-messages').innerHTML='';
+showToast("History cleared");
+await updateChatRetryButton();
+}
 
 /* VOID */
 function closeVoidView(){goBack();}
@@ -6078,6 +6161,8 @@ localStorage.setItem('nq_api_key', document.getElementById('input-api-key').valu
   document.getElementById('btn-chat-edit').addEventListener('click',()=>openCharacterForge(activeCharId));
   document.getElementById('btn-chat-clear').addEventListener('click',clearChatHistory);
   document.getElementById('btn-send').addEventListener('click',handleChatSend);
+  document.getElementById('btn-send').addEventListener('click', handleChatSend); // Already exists
+  document.getElementById('btn-chat-retry').addEventListener('click', () => handleChatSend(true)); // ADD THIS
   document.getElementById('chat-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.stopPropagation(); // newline only
