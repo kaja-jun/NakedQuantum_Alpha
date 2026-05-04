@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.33.4</title>
+<title>NakedQuantum v0.33.5</title>
 <style>
 :root {
   --bg: #000000;
@@ -3627,6 +3627,7 @@ function showPanel(id){
   // ── GUARDIAN ENTRY: immediately exile Watcher, suppress Cartographer lazy load ──
   if (id === 'view-guardian') {
     if (watcherEmbedder) {
+      try { watcherEmbedder.dispose(); } catch(e){} // Free Watcher WASM memory
       watcherEmbedder = null;
       isWatcherReady = false;
     }
@@ -4890,6 +4891,51 @@ for(const s of similarities.filter(s => s.score > 0.65)){
   }
 }
 
+async function generateFastMap(discourseId) {
+  try {
+    const d = await getDiscourse(discourseId);
+    if (!d || !d.raw_text) return;
+
+    const words = d.raw_text.trim().split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+    if (wordCount < 30) return;
+
+    const existing = await dbGet('guardian_summaries', discourseId);
+    // Skip if already mapped and word count is unchanged
+    if (existing && existing.map_type === 'fast' && existing.word_count === wordCount) return;
+
+    // Run your sovereign local heuristics
+    const edges = extractEdges(d.raw_text);
+    const terms = extractKeyTerms(d.raw_text, 10);
+    const arc = detectEmotionalArc(d.raw_text);
+    const extract = extractiveSummary(d.raw_text, 3);
+
+    let fastMap = {
+      id: discourseId,
+      discourse_id: discourseId,
+      map_type: 'fast',
+      first_line: edges.first_line,
+      last_line: edges.last_line,
+      key_terms: terms,
+      emotional_arc: arc,
+      extractive_summary: extract,
+      word_count: wordCount,
+      model: 'local-heuristic',
+      generated_at: Date.now(),
+      created_at: existing ? existing.created_at : Date.now(),
+      updated_at: Date.now()
+    };
+
+    // Inject the Watcher's vector echoes
+    fastMap = await injectWatcherFlags(fastMap, discourseId);
+
+    await dbPut('guardian_summaries', fastMap);
+    console.log(`◈ Sovereign Fast Map generated for ${discourseId}`);
+  } catch (err) {
+    console.error('Fast Map error:', err);
+  }
+}
+
   // Resolve discourse titles
 async function resolveTitle(id) {
     const d = await getDiscourse(id);
@@ -4923,7 +4969,13 @@ const DEEP_MAPPER_MODEL = 'Xenova/distilbart-cnn-6-6';
 
 let deepMapperLastUnload = 0;
 
-function unloadDeepMapper() {
+async function unloadDeepMapper() {
+  if (deepMapper) {
+    try { 
+      // This is the magic command that frees the WebAssembly RAM
+      await deepMapper.dispose(); 
+    } catch(e) { console.warn("DeepMapper dispose error", e); }
+  }
   deepMapper = null;
   deepMapperReady = false;
   deepMapperLastUnload = Date.now();
@@ -6285,9 +6337,12 @@ async function summonGuardian(userAddition){
             await new Promise(function(r) { setTimeout(r, 100); });
           }
           
-          if (subEl) subEl.textContent = urgentDiscs.length + ' terrains mapped. Speaking...';
-          // NOTE: Do NOT unload here -- we keep it alive for potential re-summon
-          // Cartographer will be unloaded when user exits Guardian (showPanel handles it)
+  if (subEl) subEl.textContent = urgentDiscs.length + ' terrains mapped. Speaking...';
+          
+          // THE FIX: We MUST unload the heavy local model before streaming the Guardian
+          // OpenRouter streams take memory. If we hold both, Safari crashes.
+          await unloadDeepMapper(); 
+          
         } else {
           // Cartographer couldn't load (memory pressure, suppressed, or failed)
           if (subEl) subEl.textContent = 'Cartographer resting. Using Fast Maps.';
