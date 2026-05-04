@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.33.1</title>
+<title>NakedQuantum v0.33.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -4863,7 +4863,7 @@ for(const s of similarities.filter(s => s.score > 0.65)){
 }
 
   // Resolve discourse titles
-  async function resolveTitle(id) {
+async function resolveTitle(id) {
     const d = await getDiscourse(id);
     return d ? d.title || 'Untitled' : 'Unknown';
   }
@@ -4893,7 +4893,20 @@ let deepMapperReady = false;
 
 const DEEP_MAPPER_MODEL = 'Xenova/distilbart-cnn-6-6';
 
+let deepMapperLastUnload = 0;
+
+function unloadDeepMapper() {
+  deepMapper = null;
+  deepMapperReady = false;
+  deepMapperLastUnload = Date.now();
+}
+
 async function initDeepMapper() {
+  // Don't reload if unloaded less than 2 seconds ago
+  if (Date.now() - deepMapperLastUnload < 2000) {
+    console.log('[DeepMapper] Cooling down, waiting...');
+    await new Promise(r => setTimeout(r, 2000));
+  }
   if (deepMapperReady) return true;
   if (deepMapperLoading) {
     // Wait for existing load to complete
@@ -6255,7 +6268,13 @@ async function summonGuardian(userAddition){
     }
     
     // ── BUILD CONTEXT FROM FAST MAPS + DEEP MAPS ──────────
+    // ── BUILD CONTEXT FROM FAST MAPS + DEEP MAPS ──────────
     var summaries = await buildGuardianContext(allDiscs);
+    
+    // GUARD: If buildGuardianContext failed silently
+    if (!summaries) {
+      throw new Error('buildGuardianContext returned empty');
+    }
     
     var allLogs = await dbGetAll('guardian_logs');
     var recentLogs = allLogs.filter(function(l){ return !l.was_silent; }).sort(function(a,b){ return b.invoked_at - a.invoked_at; }).slice(0,2);
