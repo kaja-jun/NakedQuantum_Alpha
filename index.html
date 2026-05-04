@@ -1670,6 +1670,8 @@ let selectMode=false, selectedItems=new Set();
 let deepSoupFolderId = null;
 let deepSoupPath = [{id: null, name: '꩜ Deep Soup'}];
 
+let deepMapperLoadSuppressed = false;
+let deepMapperSuppressTimer = null;
 
 /* PERSONA */
 function getGlobalPersona(){
@@ -3610,9 +3612,32 @@ function showPanel(id){
   'view-lighthouse', 'view-forge', 'view-chat', 'view-memory', 
   'view-persona', 'view-guardian', 'view-ie'
 ];
-if (id !== 'view-guardian' && currentView === 'guardian') {
+
+  // ── GUARDIAN EXIT: free Cartographer, revive Watcher after delay ──
+  if (id !== 'view-guardian' && currentView === 'guardian') {
     unloadDeepMapper();
+    // Revive Watcher after Safari has a moment to free Cartographer's WASM
+    setTimeout(() => {
+      if (!isWatcherReady && watcherDB) {
+        initWatcher();
+      }
+    }, 800);
+  }
+  
+  // ── GUARDIAN ENTRY: immediately exile Watcher, suppress Cartographer lazy load ──
+  if (id === 'view-guardian') {
+    if (watcherEmbedder) {
+      watcherEmbedder = null;
+      isWatcherReady = false;
     }
+    // Prevent Cartographer from loading for 1.5 seconds so Safari GC can breathe
+    deepMapperLoadSuppressed = true;
+    if (deepMapperSuppressTimer) clearTimeout(deepMapperSuppressTimer);
+    deepMapperSuppressTimer = setTimeout(() => {
+      deepMapperLoadSuppressed = false;
+    }, 1500);
+  }
+  
   panels.forEach(p=>{
     const el=document.getElementById(p);
     if(el)el.classList.add('hidden');
@@ -4905,6 +4930,12 @@ function unloadDeepMapper() {
 }
 
 async function initDeepMapper() {
+  // GUARD: Cartographer suppressed (Watcher still vacating memory)
+  if (deepMapperLoadSuppressed) {
+    console.log('[DeepMapper] Suppressed -- waiting for Watcher memory to free');
+    return false;
+  }
+  
   // Don't reload if unloaded less than 2 seconds ago
   if (Date.now() - deepMapperLastUnload < 2000) {
     console.log('[DeepMapper] Cooling down, waiting...');
@@ -6255,14 +6286,19 @@ async function summonGuardian(userAddition){
           }
           
           if (subEl) subEl.textContent = urgentDiscs.length + ' terrains mapped. Speaking...';
+          // NOTE: Do NOT unload here -- we keep it alive for potential re-summon
+          // Cartographer will be unloaded when user exits Guardian (showPanel handles it)
         } else {
-          if (subEl) subEl.textContent = 'Cartographer unavailable. Using Fast Maps.';
+          // Cartographer couldn't load (memory pressure, suppressed, or failed)
+          if (subEl) subEl.textContent = 'Cartographer resting. Using Fast Maps.';
         }
         
+      } else {
+        // No urgent discourses found
+        if (subEl) subEl.textContent = 'No urgent terrain to map. Using Fast Maps.';
       }
     }
-    
-    // ── BUILD CONTEXT FROM FAST MAPS + DEEP MAPS ──────────
+
     // ── BUILD CONTEXT FROM FAST MAPS + DEEP MAPS ──────────
     var summaries = await buildGuardianContext(allDiscs);
     
