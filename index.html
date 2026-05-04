@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.33</title>
+<title>NakedQuantum v0.33.1</title>
 <style>
 :root {
   --bg: #000000;
@@ -1753,7 +1753,6 @@ try {
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders(id TEXT PRIMARY KEY, name TEXT, parent_id TEXT, created_at INTEGER, updated_at INTEGER, is_deleted INTEGER DEFAULT 0)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses(id TEXT PRIMARY KEY, title TEXT, raw_text TEXT, folder_id TEXT, source_link TEXT, item_type TEXT, tags TEXT, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
  db.run("CREATE TABLE IF NOT EXISTS guardian_summaries(id TEXT PRIMARY KEY, discourse_id TEXT, summary TEXT, map_type TEXT, first_line TEXT, last_line TEXT, key_terms TEXT, emotional_arc TEXT, extractive_summary TEXT, watcher TEXT, word_count INTEGER, model TEXT, generated_at INTEGER, created_at INTEGER, updated_at INTEGER)");
- db.run("CREATE TABLE IF NOT EXISTS guardian_summaries(id TEXT PRIMARY KEY, discourse_id TEXT, summary TEXT, map_type TEXT, word_count INTEGER, created_at INTEGER, updated_at INTEGER)");
  db.run("CREATE TABLE IF NOT EXISTS immutable_entities(id TEXT PRIMARY KEY, display_name TEXT NOT NULL, archetype_tag TEXT, existential_function TEXT, system_prompt_core TEXT, constraints TEXT, voice_limits TEXT, memory_policy TEXT DEFAULT 'stateless', model_variants TEXT, example_turns TEXT, watcher_thresholds TEXT, guardian_audit_hash TEXT, sigil_svg TEXT, locked_at INTEGER, signature TEXT, is_hidden INTEGER DEFAULT 0, created_at INTEGER, updated_at INTEGER)");
 db.run("CREATE TABLE IF NOT EXISTS immutable_entities_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS characters(id TEXT PRIMARY KEY, name TEXT, role TEXT, backstory TEXT, personality TEXT, lorebook TEXT, scenario TEXT, inclination TEXT, relationships TEXT, pc_info TEXT, player_role_id TEXT, image TEXT, temperature REAL DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
@@ -5055,116 +5054,6 @@ function initMappingModeUI() {
   const select = document.getElementById('guardian-mapping-select');
   if (select) {
     select.value = localStorage.getItem('nq_cartographer_mode') || 'sovereign';
-  }
-}
-
-// ── FAST MAP GENERATOR ────────────────────────────────────
-async function generateFastMap(discourseId) {
-  const d = await getDiscourse(discourseId);
-  if (!d || !d.raw_text) return null;
-  
-  const rawText = d.raw_text.trim();
-  const words = rawText.split(/\s+/).filter(Boolean);
-  const wordCount = words.length;
-  
-  if (wordCount < 20) return null; // Too shallow
-  
-  // Assemble the Fast Map
-  let fastMap = {
-    id: discourseId,
-    discourse_id: discourseId,
-    map_type: 'fast',
-    word_count: wordCount,
-    created_at: Date.now(),
-    updated_at: Date.now(),
-    ...extractEdges(rawText),
-    key_terms: extractKeyTerms(rawText, 10),
-    emotional_arc: detectEmotionalArc(rawText),
-    extractive_summary: extractiveSummary(rawText, 5)
-  };
-  
-  // Inject Watcher intelligence
-  fastMap = await injectWatcherFlags(fastMap, discourseId);
-  
-  // Store it
-  await dbPut('guardian_summaries', fastMap);
-  
-  return fastMap;
-}
-
-      async function mapTerritory(textPayload) {
-        for (const model of fallbackModels) {
-          try {
-            const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${key}`, 
-                'Content-Type': 'application/json', 
-                'HTTP-Referer': 'https://nakedquantum.com', 
-                'X-Title': 'NakedQuantum'
-              },
-              body: JSON.stringify({
-                model: model,
-                max_tokens: 180,
-                messages:[
-                  {
-                    role: 'system', 
-                    content: 'You are the Cartographer of the Abyss. Compress this text into one dense paragraph (max 120 words). Map the core themes, unresolved tensions, and emotional texture. Do not categorize. Do not list. No preamble. Pure insight.'
-                  },
-                  {role: 'user', content: textPayload}
-                ]
-              })
-            });
-            
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            
-            const data = await res.json();
-            const text = data.choices?.[0]?.message?.content?.trim();
-            if (text) return text;
-          } catch (e) {
-            // Logs failures to console only, no toasts.
-            console.warn(`Cartographer: ${model} failed, stepping down...`, e.message);
-          }
-        }
-        console.warn("Cartographer: All fallback models failed.");
-        return null;
-      }
-
-      if (wordCount <= 10000) {
-        finalSummary = await mapTerritory(`Title: ${d.title}\n\n${d.raw_text}`);
-      } else {
-        // Massive Text: Map-Reduce Chunking
-        const chunkSize = 4000;
-        let chunks =[];
-        
-        for (let i = 0; i < words.length; i += chunkSize) {
-          const chunkText = words.slice(i, i + chunkSize).join(' ');
-          const chunkSum = await mapTerritory(`Title: ${d.title} (Part ${Math.floor(i/chunkSize)+1})\n\n${chunkText}`);
-          if (chunkSum) chunks.push(chunkSum);
-        }
-        
-        if (chunks.length > 0) {
-          finalSummary = await mapTerritory(`Title: ${d.title} (Master Map)\n\nCombine these map fragments into one final 100-word dense emotional cartography:\n\n${chunks.join('\n\n')}`);
-        }
-      }
-    }
-
-    if (finalSummary) {
-      await dbPut('guardian_summaries', {
-        id: discourseId,
-        discourse_id: discourseId,
-        summary: finalSummary,
-        word_count: wordCount,
-        created_at: existing ? existing.created_at : Date.now(),
-        updated_at: Date.now()
-      });
-      console.log(`◈ Cartographer mapped engram: ${discourseId} (${wordCount} words)`);
-    }
-  } catch (err) {
-    console.error("Cartographer encountered a fatal error:", err);
-  } finally {
-    _cartographerLocks[discourseId] = false;
-    delete _cartographerTimers[discourseId];
   }
 }
 
