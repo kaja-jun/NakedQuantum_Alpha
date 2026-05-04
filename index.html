@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.32.1</title>
+<title>NakedQuantum_dev v0.32.2</title>
 <style>
 :root {
   --bg: #000000;
@@ -4107,41 +4107,68 @@ function navToBc(idx){
 }
 
 async function openDiscourse(id){
-  if(currentDiscourseId&&id!==currentDiscourseId)await saveCurrentDiscourse(true);
-  const disc=await getDiscourse(id);if(!disc){showToast("Discourse not found ◆");return;}
-  currentDiscourseId=id;
-    // ---> SENSEI'S INCISION: Silent Attention Bump
+  if(currentDiscourseId && id !== currentDiscourseId) await saveCurrentDiscourse(true);
+  const disc = await getDiscourse(id); 
+  if(!disc){ showToast("Discourse not found ◆"); return; }
+  
+  currentDiscourseId = id;
+  
+  // Silent Attention Bump
   await dbPut("cosm_discourses", {...disc, updated_at: Date.now()}); 
+  
   document.getElementById("discourse-title").value = disc.title || "";
-const existingTitle = disc.title && disc.title !== "Untitled Discourse" ? disc.title : "";
-const ta = document.getElementById("content-textarea");
-  document.getElementById("content-textarea").value = disc.raw_text || "";
-// Trigger auto-height after content loads
-setTimeout(() => {
-  const ta = document.getElementById('content-textarea');
-  ta.style.height = 'auto';
-  ta.style.height = Math.max(ta.scrollHeight, window.innerHeight * 0.6) + 'px';
-}, 50);
-  await renderMeta(disc); await renderMosaicDisplay(id);
+  
+  // SAFELY RENDER UNIFIED TEXT
+  let contentText = disc.raw_text || "";
+  const savedTitle = disc.title ? disc.title.trim() : "";
+  
+  // Legacy Migration: If an old discourse had its title saved separately, 
+  // prepend it to the text area so it isn't lost in the void.
+  if (savedTitle && savedTitle !== "Untitled" && savedTitle !== "Untitled Discourse") {
+      const firstLine = (contentText.split('\n').find(l => l.trim().length > 0) || "").trim();
+      if (firstLine !== savedTitle && !firstLine.startsWith(savedTitle)) {
+          contentText = savedTitle + "\n\n" + contentText;
+      }
+  }
+  
+  const ta = document.getElementById("content-textarea");
+  ta.value = contentText;
+  
+  // Trigger auto-height after content loads
+  setTimeout(() => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.max(ta.scrollHeight, window.innerHeight * 0.6) + 'px';
+  }, 50);
+  
+  await renderMeta(disc); 
+  await renderMosaicDisplay(id);
 
-// Chronicle vs Discourse feel
-const ta2 = document.getElementById('content-textarea');
-const lhInner = document.querySelector('.lighthouse-inner');
-if(disc.item_type === 'chronicle'){
-  ta2.placeholder = 'What was brought in from outside...\n\nPaste, transcribe, or write what arrived from elsewhere.';
-  if(lhInner) lhInner.style.borderLeft = '2px solid var(--accent-dim)';
-  if(lhInner) lhInner.style.paddingLeft = '18px';
-} else if(disc.item_type === 'note'){
-  ta2.placeholder = 'A spark...\n\nWrite fast. Don\'t construct.';
-  if(lhInner) lhInner.style.borderLeft = 'none';
-  if(lhInner) lhInner.style.paddingLeft = '0';
-} else {
-  ta2.placeholder = 'Title\n\nBegin writing...';
-  if(lhInner) lhInner.style.borderLeft = 'none';
-  if(lhInner) lhInner.style.paddingLeft = '0';
-}
-setEditorMode('write'); showPanel('view-lighthouse');
-  if(disc.folder_id&&currentFolderId!==disc.folder_id){const f=await dbGet("cosm_folders",disc.folder_id);if(f){breadcrumbPath=[{id:null,name:'◈ The Soup'},{id:disc.folder_id,name:f.name}];currentFolderId=disc.folder_id;}}
+  // Chronicle vs Discourse feel
+  const lhInner = document.querySelector('.lighthouse-inner');
+  if(disc.item_type === 'chronicle'){
+    ta.placeholder = 'What was brought in from outside...\n\nPaste, transcribe, or write what arrived from elsewhere.';
+    if(lhInner) lhInner.style.borderLeft = '2px solid var(--accent-dim)';
+    if(lhInner) lhInner.style.paddingLeft = '18px';
+  } else if(disc.item_type === 'note'){
+    ta.placeholder = 'A spark...\n\nWrite fast. Don\'t construct.';
+    if(lhInner) lhInner.style.borderLeft = 'none';
+    if(lhInner) lhInner.style.paddingLeft = '0';
+  } else {
+    ta.placeholder = 'Title\n\nBegin writing...';
+    if(lhInner) lhInner.style.borderLeft = 'none';
+    if(lhInner) lhInner.style.paddingLeft = '0';
+  }
+  
+  setEditorMode('write'); 
+  showPanel('view-lighthouse');
+  
+  if(disc.folder_id && currentFolderId !== disc.folder_id){
+    const f = await dbGet("cosm_folders", disc.folder_id);
+    if(f){
+      breadcrumbPath =[{id: null, name: '◈ The Soup'}, {id: disc.folder_id, name: f.name}];
+      currentFolderId = disc.folder_id;
+    }
+  }
 }
 
 async function renderMeta(disc){
@@ -4190,18 +4217,20 @@ async function saveCurrentDiscourse(silent=false){
   if(!currentDiscourseId)return;
   
   const ta = document.getElementById("content-textarea");
-  const lines = ta.value.split("\n");
-  const title = lines[0].trim() || "Untitled";
+  const fullText = ta.value;
   
-  // SENSEI FIX: Slice from 1 to keep everything after title, then trim leading whitespace
-  // This prevents deleting your first sentence if you didn't leave a blank line.
-  const raw_text = lines.slice(1).join("\n").replace(/^\s+/, ''); 
+  // Extract the first non-empty line as the title for the database index
+  const lines = fullText.split('\n');
+  const title = lines.find(l => l.trim().length > 0)?.trim().slice(0, 120) || "Untitled";
+  
+  // The body IS the full text. No slicing. No data loss.
+  const raw_text = fullText;
   
   document.getElementById("discourse-title").value = title;
   const ind = document.getElementById('lh-save-indicator');
   if(ind){ ind.textContent='◆ saving'; ind.className='lh-save-indicator saving'; }
   
-  await updateDiscourse(currentDiscourseId,{title,raw_text});
+  await updateDiscourse(currentDiscourseId, {title, raw_text});
   
   if(ind){ ind.textContent='◆ saved'; ind.className='lh-save-indicator visible'; setTimeout(()=>{ ind.className='lh-save-indicator'; },2000); }
   if(!silent)showToast("Saved ◆");
@@ -4210,9 +4239,7 @@ async function saveCurrentDiscourse(silent=false){
   if (isWatcherReady && currentDiscourseId) {
     const disc = await getDiscourse(currentDiscourseId);
     if (disc && disc.item_type) queueWatcherEmbed(currentDiscourseId, title, raw_text, disc.item_type);
-    
-    // Call the Cartographer with the new debounced queue
-    triggerCartographer(currentDiscourseId);
+    triggerCartographer(currentDiscourseId); // Call our new Cartographer
   }
 }
 
