@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.32.2</title>
+<title>NakedQuantum_dev v0.33</title>
 <style>
 :root {
   --bg: #000000;
@@ -1418,6 +1418,16 @@ select.cosm-input {
       <div class="guardian-label">Guardian of the Abyss Archives</div>
       <div class="guardian-sub" id="guardian-sub">The Abyss is listening.</div>
           <button class="btn-summon" id="btn-summon-guardian">Summon</button>
+          <!-- In the Guardian realm, near the model selector -->
+<div class="guardian-mapping-mode" style="margin-top: 12px; display: flex; align-items: center; gap: 8px; justify-content: center;">
+  <span style="font-size: 9px; color: var(--g-muted); letter-spacing: 1px;">MAPPING:</span>
+  <select id="guardian-mapping-select" 
+    style="background: var(--g-surface); border: 1px solid var(--g-border); color: var(--g-accent); font-size: 9px; letter-spacing: 1.5px; padding: 4px 8px; border-radius: 4px; text-transform: uppercase;"
+    onchange="setMappingMode(this.value)">
+    <option value="sovereign">Sovereign (local)</option>
+    <option value="deep">Deep (API)</option>
+  </select>
+</div>
       <div class="guardian-model-selector">
         <button class="guardian-model-pill" id="guardian-model-pill" onclick="cycleGuardianModel()">
           ◈ deepseek-v4-flash
@@ -1742,7 +1752,8 @@ try {
 
   db.run("CREATE TABLE IF NOT EXISTS cosm_folders(id TEXT PRIMARY KEY, name TEXT, parent_id TEXT, created_at INTEGER, updated_at INTEGER, is_deleted INTEGER DEFAULT 0)");
   db.run("CREATE TABLE IF NOT EXISTS cosm_discourses(id TEXT PRIMARY KEY, title TEXT, raw_text TEXT, folder_id TEXT, source_link TEXT, item_type TEXT, tags TEXT, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
- db.run("CREATE TABLE IF NOT EXISTS guardian_summaries(id TEXT PRIMARY KEY, discourse_id TEXT, summary TEXT, word_count INTEGER, created_at INTEGER, updated_at INTEGER)");
+ db.run("CREATE TABLE IF NOT EXISTS guardian_summaries(id TEXT PRIMARY KEY, discourse_id TEXT, summary TEXT, map_type TEXT, first_line TEXT, last_line TEXT, key_terms TEXT, emotional_arc TEXT, extractive_summary TEXT, watcher TEXT, word_count INTEGER, model TEXT, generated_at INTEGER, created_at INTEGER, updated_at INTEGER)");
+ db.run("CREATE TABLE IF NOT EXISTS guardian_summaries(id TEXT PRIMARY KEY, discourse_id TEXT, summary TEXT, map_type TEXT, word_count INTEGER, created_at INTEGER, updated_at INTEGER)");
  db.run("CREATE TABLE IF NOT EXISTS immutable_entities(id TEXT PRIMARY KEY, display_name TEXT NOT NULL, archetype_tag TEXT, existential_function TEXT, system_prompt_core TEXT, constraints TEXT, voice_limits TEXT, memory_policy TEXT DEFAULT 'stateless', model_variants TEXT, example_turns TEXT, watcher_thresholds TEXT, guardian_audit_hash TEXT, sigil_svg TEXT, locked_at INTEGER, signature TEXT, is_hidden INTEGER DEFAULT 0, created_at INTEGER, updated_at INTEGER)");
 db.run("CREATE TABLE IF NOT EXISTS immutable_entities_enc(id TEXT PRIMARY KEY, enc TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS characters(id TEXT PRIMARY KEY, name TEXT, role TEXT, backstory TEXT, personality TEXT, lorebook TEXT, scenario TEXT, inclination TEXT, relationships TEXT, pc_info TEXT, player_role_id TEXT, image TEXT, temperature REAL DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at INTEGER, created_at INTEGER, updated_at INTEGER)");
@@ -4239,7 +4250,7 @@ async function saveCurrentDiscourse(silent=false){
   if (isWatcherReady && currentDiscourseId) {
     const disc = await getDiscourse(currentDiscourseId);
     if (disc && disc.item_type) queueWatcherEmbed(currentDiscourseId, title, raw_text, disc.item_type);
-    triggerCartographer(currentDiscourseId); // Call our new Cartographer
+    generateFastMap(currentDiscourseId);
   }
 }
 
@@ -4646,59 +4657,440 @@ async function handleChatSend(isRetry = false) {
   }
 }
 
-// ── THE LIGHTHOUSE CARTOGRAPHER ──────────────────────────────────────────────
-let _cartographerTimers = {};
-let _cartographerLocks = {};
-
-function triggerCartographer(discourseId) {
-  if (_cartographerTimers[discourseId]) clearTimeout(_cartographerTimers[discourseId]);
-  // 3-second silence delay. Completely asynchronous, never blocks UI.
-  _cartographerTimers[discourseId] = setTimeout(() => runCartographer(discourseId), 3000);
+function extractEdges(text) {
+  const lines = text.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length === 0) return { first_line: '', last_line: '' };
+  return {
+    first_line: lines[0].trim().slice(0, 200),
+    last_line: lines[lines.length - 1].trim().slice(0, 200)
+  };
 }
 
-async function runCartographer(discourseId) {
-  if (_cartographerLocks[discourseId]) return;
-  _cartographerLocks[discourseId] = true;
+const STOPWORDS = new Set([
+  'the','a','an','is','was','were','be','been','being','have','has','had',
+  'do','does','did','will','would','shall','should','may','might','must',
+  'can','could','i','me','my','mine','myself','you','your','yours',
+  'he','him','his','she','her','hers','it','its','itself',
+  'we','us','our','ours','they','them','their','theirs',
+  'this','that','these','those','what','which','who','whom',
+  'and','but','or','nor','not','so','yet','for','if','to','of','in',
+  'on','at','by','from','with','about','into','through','during',
+  'after','above','below','between','out','off','over','under',
+  'again','further','then','once','here','there','when','where',
+  'why','how','all','both','each','few','more','most','other','some',
+  'such','only','own','same','than','too','very','just','now',
+  'also','even','still','already','always','never','sometimes'
+]);
 
-  try {
-    const d = await getDiscourse(discourseId);
-    if (!d || !d.raw_text) return;
+function extractKeyTerms(text, maxTerms = 10) {
+  const words = text.toLowerCase()
+    .replace(/[^\w\s']/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !STOPWORDS.has(w));
+  
+  // Count frequencies
+  const freq = {};
+  for (const w of words) {
+    freq[w] = (freq[w] || 0) + 1;
+  }
+  
+  // Simple TF-IDF approximation: TF * log(totalWords / (1 + docCount))
+  // For a single document, IDF is approximated by uniqueness
+  const totalWords = words.length;
+  const terms = Object.entries(freq)
+    .map(([term, count]) => ({
+      term,
+      count,
+      tfidf: (count / totalWords) * Math.log(totalWords / (1 + count)) 
+      // Rarer words get higher weight
+    }))
+    .sort((a, b) => b.tfidf - a.tfidf)
+    .slice(0, maxTerms);
+  
+  return terms;
+}
 
-    const words = d.raw_text.trim().split(/\s+/).filter(Boolean);
-    const wordCount = words.length;
-    if (wordCount < 30) return; // Too shallow to map
+const SENTIMENT = {
+  positive: new Set([
+    'love','hope','light','warm','open','free','peace','calm','soft',
+    'gentle','bright','clear','true','whole','heal','grow','bloom',
+    'rise','reach','hold','safe','trust','grace','grateful'
+  ]),
+  negative: new Set([
+    'fear','pain','dark','cold','close','trapped','heavy','hard',
+    'sharp','lost','broken','wound','fall','sink','empty','alone',
+    'silence','never','nothing','hollow','bitter','ache','weight'
+  ]),
+  tentative: new Set([
+    'perhaps','maybe','sometimes','could','might','seems','almost',
+    'trying','wondering','question','uncertain','hesitate'
+  ]),
+  confessional: new Set([
+    'truth','honest','admit','confess','real','raw','naked',
+    'bare','expose','reveal','actually','felt','feel','feeling'
+  ]),
+  resolved: new Set([
+    'accept','chose','decide','finally','enough','done','settle',
+    'rest','still','quiet','understood','understand','knowing'
+  ])
+};
 
-    const existing = await dbGet('guardian_summaries', discourseId);
-    // Rule: Skip if already summarized and word count is exactly the same
-    if (existing && existing.summary && existing.word_count === wordCount) {
-      return; 
+function detectEmotionalArc(text) {
+  const lines = text.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length < 3) return { direction: 'too short', opening_tone: 'neutral', closing_tone: 'neutral', tension_shift: 0 };
+  
+  const firstThird = lines.slice(0, Math.ceil(lines.length / 3)).join(' ').toLowerCase();
+  const lastThird = lines.slice(-Math.ceil(lines.length / 3)).join(' ').toLowerCase();
+  
+  function score(text, lexicon) {
+    const words = text.split(/\s+/);
+    let hits = 0;
+    for (const w of words) {
+      if (lexicon.has(w)) hits++;
     }
+    return hits / Math.max(words.length, 1);
+  }
+  
+  // Classify opening tone
+  const openingTones = [
+    { name: 'tentative', score: score(firstThird, SENTIMENT.tentative) },
+    { name: 'confessional', score: score(firstThird, SENTIMENT.confessional) },
+    { name: 'negative', score: score(firstThird, SENTIMENT.negative) },
+    { name: 'positive', score: score(firstThird, SENTIMENT.positive) }
+  ].sort((a, b) => b.score - a.score);
+  
+  // Classify closing tone
+  const closingTones = [
+    { name: 'resolved', score: score(lastThird, SENTIMENT.resolved) + score(lastThird, SENTIMENT.positive) },
+    { name: 'confessional', score: score(lastThird, SENTIMENT.confessional) },
+    { name: 'negative', score: score(lastThird, SENTIMENT.negative) },
+    { name: 'tentative', score: score(lastThird, SENTIMENT.tentative) }
+  ].sort((a, b) => b.score - a.score);
+  
+  const openingTone = openingTones[0].name;
+  const closingTone = closingTones[0].name;
+  
+  // Tension shift: positive = more tense, negative = resolved
+  const openNeg = score(firstThird, SENTIMENT.negative);
+  const closeNeg = score(lastThird, SENTIMENT.negative);
+  const tensionShift = openNeg - closeNeg;
+  
+  // Direction string
+  let direction;
+  if (tensionShift > 0.02) direction = `${openingTone} → resolving`;
+  else if (tensionShift < -0.02) direction = `${openingTone} → escalating`;
+  else direction = `${openingTone} → ${closingTone}`;
+  
+  return {
+    direction,
+    opening_tone: openingTone,
+    closing_tone: closingTone,
+    tension_shift: parseFloat(tensionShift.toFixed(3))
+  };
+}
 
-    let finalSummary = '';
+function extractiveSummary(text, maxSentences = 5) {
+  const sentences = text
+    .replace(/([.!?])\s+/g, '$1|')
+    .split('|')
+    .filter(s => s.trim().length > 20);
+  
+  if (sentences.length <= maxSentences) return sentences.join(' ').trim();
+  
+  const keyTerms = extractKeyTerms(text, 15);
+  const keyTermSet = new Set(keyTerms.map(t => t.term));
+  
+  // Score each sentence
+  const scored = sentences.map((s, i) => {
+    const words = s.toLowerCase().split(/\s+/);
+    let termScore = 0;
+    for (const w of words) {
+      if (keyTermSet.has(w)) termScore++;
+    }
+    
+    // Position bonus: first and last sentences matter more
+    const positionBonus = (i === 0 || i === sentences.length - 1) ? 0.5 : 
+                          (i < 3 || i > sentences.length - 3) ? 0.2 : 0;
+    
+    return {
+      sentence: s.trim(),
+      score: (termScore / words.length) + positionBonus,
+      index: i
+    };
+  });
+  
+  // Pick top N, then sort by original position to preserve flow
+  const top = scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxSentences)
+    .sort((a, b) => a.index - b.index);
+  
+  return top.map(t => t.sentence).join(' ').trim();
+}
 
-    if (wordCount <= 300) {
-      // Under 300 words: The map is the territory. No API call needed.
-      finalSummary = d.raw_text.trim();
-    } else {
-      const key = await readSecureKey('nq_api_key') || '';
-      if (!key) {
-        console.warn("Cartographer: No API key found. Silently aborting.");
-        return;
+async function injectWatcherFlags(fastMap, discourseId) {
+  if (!isWatcherReady || !watcherDB) return fastMap;
+  
+  const current = await wdb.get('embeddings', discourseId);
+  if (!current || !current.vector) return fastMap;
+  
+  const allEmbeds = await wdb.getAll('embeddings');
+  const currentVec = new Float32Array(current.vector);
+  
+  const similarities = [];
+  for (const e of allEmbeds) {
+    if (e.id === discourseId) continue;
+    const sim = watcherCosine(currentVec, new Float32Array(e.vector));
+    similarities.push({ id: e.id, score: sim });
+  }
+  
+  similarities.sort((a, b) => b.score - a.score);
+  
+  // Top similar (exclude self)
+  const topSimilar = similarities.slice(0, 3);
+  
+  // Potential contradictions: high similarity but need to check emotional arc
+  // Simplified: flag any with similarity > 0.7
+  const topContradictory = [];
+for(const s of similarities.filter(s => s.score > 0.65)){
+  const otherMap = await dbGet('guardian_summaries', s.id);
+  if(!otherMap) continue;
+  const currentArc = fastMap.emotional_arc?.tension_shift || 0;
+  const otherArc = otherMap.emotional_arc?.tension_shift || 0;
+  // Opposite directions = one resolving, one escalating
+  if((currentArc > 0.02 && otherArc < -0.02) || (currentArc < -0.02 && otherArc > 0.02)){
+    topContradictory.push(s);
+  }
+}
+
+  // Resolve discourse titles
+  async function resolveTitle(id) {
+    const d = await getDiscourse(id);
+    return d ? d.title || 'Untitled' : 'Unknown';
+  }
+  
+  fastMap.watcher = {
+    top_similar: await Promise.all(topSimilar.map(async s => ({
+      id: s.id,
+      score: parseFloat(s.score.toFixed(3)),
+      title: await resolveTitle(s.id)
+    }))),
+    top_contradictory: await Promise.all(topContradictory.map(async s => ({
+      id: s.id,
+      score: parseFloat(s.score.toFixed(3)),
+      title: await resolveTitle(s.id)
+    })))
+  };
+  
+  return fastMap;
+}
+
+// ── LOCAL DEEP MAPPER ────────────────────────────────────
+// Loaded only on Guardian summon when sovereign mode is active
+
+let deepMapper = null;
+let deepMapperLoading = false;
+let deepMapperReady = false;
+
+const DEEP_MAPPER_MODEL = 'Xenova/distilbart-cnn-6-6';
+
+async function initDeepMapper() {
+  if (deepMapperReady) return true;
+  if (deepMapperLoading) {
+    // Wait for existing load to complete
+    return new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (deepMapperReady) { clearInterval(check); resolve(true); }
+        if (!deepMapperLoading) { clearInterval(check); resolve(false); }
+      }, 500);
+    });
+  }
+  
+  deepMapperLoading = true;
+  
+  try {
+    const { pipeline, env } = await import(
+      'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/transformers.min.js'
+    );
+    
+    env.useBrowserCache = true;
+    env.allowLocalModels = false;
+    env.backends.onnx.wasm.wasmPaths = 
+      'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.0/dist/';
+    
+    // Update the summoning UI
+    const subEl = document.getElementById('guardian-sub');
+    if (subEl) subEl.textContent = 'Loading the Cartographer...';
+    
+    deepMapper = await pipeline('summarization', DEEP_MAPPER_MODEL, {
+      quantized: true,
+      progress_callback: (progress) => {
+        if (progress.status === 'downloading' && subEl) {
+          const loaded = Math.round((progress.loaded || 0) / 1024 / 1024);
+          const total = Math.round((progress.total || 306) / 1024 / 1024);
+          subEl.textContent = `Cartographer: ${loaded}MB / ${total}MB`;
+        }
+        if (progress.status === 'ready' && subEl) {
+          subEl.textContent = 'Cartographer ready. Mapping...';
+        }
       }
+    });
+    
+    deepMapperReady = true;
+    deepMapperLoading = false;
+    return true;
+    
+  } catch (err) {
+    console.error('[DeepMapper] Failed to load:', err);
+    deepMapperLoading = false;
+    deepMapper = null;
+    return false;
+  }
+}
 
-      // Dynamic Fallback Cascade
-      const userCartoModel = localStorage.getItem('nq_cartographer_model');
-      const globalModel = localStorage.getItem('nq_model');
-      
-      const rawFallbackModels =[
-        userCartoModel,
-        'deepseek/deepseek-v4-flash',
-        'google/gemini-2.5-flash-lite',
-        globalModel
-      ];
-      
-      // Use Set to remove duplicates (e.g. if globalModel is deepseek-v4-flash, it only tries once)
-      const fallbackModels =[...new Set(rawFallbackModels.filter(Boolean))];
+async function generateDeepMap(discourseId, rawText) {
+  if (!deepMapperReady || !deepMapper) return null;
+  
+  // Truncate to model's max input (typically 1024 tokens for distilbart)
+  const truncated = rawText.trim().slice(0, 3000);
+  
+  try {
+    const result = await deepMapper(truncated, {
+      max_length: 150,
+      min_length: 40,
+      do_sample: false  // deterministic -- no hallucination risk
+    });
+    
+    const summary = result[0]?.summary_text || '';
+    
+    if (summary.trim().length < 20) return null;
+    
+    return {
+      id: discourseId,
+      discourse_id: discourseId,
+      map_type: 'deep_local',
+      summary: summary.trim(),
+      word_count: rawText.trim().split(/\s+/).filter(Boolean).length,
+      model: DEEP_MAPPER_MODEL,
+      generated_at: Date.now()
+    };
+    
+  } catch (err) {
+    console.error('[DeepMapper] Generation failed for', discourseId, err);
+    return null;
+  }
+}
+
+// Select urgent discourses using Watcher intelligence
+async function selectUrgentDiscourses(discs, maxCount = 5) {
+  const candidates = [];
+  
+  for (const d of discs) {
+    const fastMap = await dbGet('guardian_summaries', d.id);
+    let urgencyScore = 0;
+    
+    // Factor 1: Has Watcher contradictions (very urgent)
+    if (fastMap?.watcher?.top_contradictory?.length > 0) {
+      urgencyScore += fastMap.watcher.top_contradictory.length * 3;
+    }
+    
+    // Factor 2: Has strong echoes (the user is circling something)
+    if (fastMap?.watcher?.top_similar?.length > 0) {
+      const highSim = fastMap.watcher.top_similar.filter(s => s.score > 0.8);
+      urgencyScore += highSim.length * 2;
+    }
+    
+    // Factor 3: Emotional arc is escalating (unresolved tension)
+    if (fastMap?.emotional_arc?.tension_shift > 0.02) {
+      urgencyScore += 2;
+    }
+    
+    // Factor 4: Longer text -- more substance to analyze
+    const wordCount = fastMap?.word_count || 
+      (d.raw_text || '').trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount > 500) urgencyScore += 1;
+    
+    // Factor 5: Recent -- written within last 7 days
+    const age = Date.now() - (d.created_at || 0);
+    if (age < 7 * 86400000) urgencyScore += 2;
+    
+    // Factor 6: No deep map exists yet
+    const deepMap = await dbGet('guardian_summaries', d.id + '_deep');
+    if (!deepMap) urgencyScore += 1;
+    
+    candidates.push({
+      id: d.id,
+      title: d.title || 'Untitled',
+      rawText: d.raw_text || '',
+      urgencyScore,
+      fastMap
+    });
+  }
+  
+  // Sort by urgency, take top N
+  candidates.sort((a, b) => b.urgencyScore - a.urgencyScore);
+  return candidates.slice(0, maxCount);
+}
+
+// Unload model to free memory after Guardian finishes
+function unloadDeepMapper() {
+  deepMapper = null;
+  deepMapperReady = false;
+  // Let GC collect the model memory
+  if (typeof gc === 'function') gc();
+}
+
+function setMappingMode(mode) {
+  localStorage.setItem('nq_cartographer_mode', mode);
+  
+  if (mode === 'sovereign') {
+    showToast('◈ Sovereign -- Cartographer runs locally, no network');
+  } else {
+    showToast('◈ Deep -- API-powered maps (uses your key)');
+  }
+}
+
+// Set initial value on Guardian view open
+function initMappingModeUI() {
+  const select = document.getElementById('guardian-mapping-select');
+  if (select) {
+    select.value = localStorage.getItem('nq_cartographer_mode') || 'sovereign';
+  }
+}
+
+// ── FAST MAP GENERATOR ────────────────────────────────────
+async function generateFastMap(discourseId) {
+  const d = await getDiscourse(discourseId);
+  if (!d || !d.raw_text) return null;
+  
+  const rawText = d.raw_text.trim();
+  const words = rawText.split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  
+  if (wordCount < 20) return null; // Too shallow
+  
+  // Assemble the Fast Map
+  let fastMap = {
+    id: discourseId,
+    discourse_id: discourseId,
+    map_type: 'fast',
+    word_count: wordCount,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    ...extractEdges(rawText),
+    key_terms: extractKeyTerms(rawText, 10),
+    emotional_arc: detectEmotionalArc(rawText),
+    extractive_summary: extractiveSummary(rawText, 5)
+  };
+  
+  // Inject Watcher intelligence
+  fastMap = await injectWatcherFlags(fastMap, discourseId);
+  
+  // Store it
+  await dbPut('guardian_summaries', fastMap);
+  
+  return fastMap;
+}
 
       async function mapTerritory(textPayload) {
         for (const model of fallbackModels) {
@@ -5859,6 +6251,7 @@ async function openGuardianView(){
   showPanel('view-guardian');
   guardianState = 'resting';
   resetGuardianUI();
+  initMappingModeUI();
   await renderGuardianLogs();
 }
 
@@ -5926,22 +6319,82 @@ async function summonGuardian(userAddition){
   sub.textContent = '';
   try {
     var allDiscs = (await getDiscourses()).filter(function(d){ return !d.deleted_at && !d.isDeleted; });
+
+    // ── SOVEREIGN DEEP MAPPER (if enabled) ────────────────
+    var mappingMode = localStorage.getItem('nq_cartographer_mode') || 'sovereign';
+    var subEl = document.getElementById('guardian-sub');
+    
+    if (mappingMode === 'sovereign') {
+      var urgentDiscs = await selectUrgentDiscourses(allDiscs, 5);
+      
+      if (urgentDiscs && urgentDiscs.length > 0) {
+        var loaded = await initDeepMapper();
+        
+        if (loaded) {
+          var mapped = 0;
+          for (var d of urgentDiscs) {
+            if (subEl) subEl.textContent = 'Mapping: ' + (d.title || 'Untitled').slice(0, 40) + '... (' + (++mapped) + '/' + urgentDiscs.length + ')';
+            
+            var existingDeep = await dbGet('guardian_summaries', d.id + '_deep');
+            if (existingDeep && (Date.now() - existingDeep.generated_at < 7 * 86400000)) {
+              continue;
+            }
+            
+            var deepMap = await generateDeepMap(d.id, d.rawText);
+            if (deepMap) {
+              await dbPut('guardian_summaries', {
+                id: d.id + '_deep',
+                discourse_id: d.id,
+                map_type: 'deep_local',
+                summary: deepMap.summary,
+                word_count: deepMap.word_count,
+                model: deepMap.model,
+                generated_at: deepMap.generated_at
+              });
+            }
+            
+            await new Promise(function(r) { setTimeout(r, 100); });
+          }
+          
+          if (subEl) subEl.textContent = urgentDiscs.length + ' terrains mapped. Speaking...';
+        } else {
+          if (subEl) subEl.textContent = 'Cartographer unavailable. Using Fast Maps.';
+        }
+        
+        unloadDeepMapper();
+      }
+    }
+    
+    // ── BUILD CONTEXT FROM FAST MAPS + DEEP MAPS ──────────
     var summaries = await buildGuardianContext(allDiscs);
+    
     var allLogs = await dbGetAll('guardian_logs');
     var recentLogs = allLogs.filter(function(l){ return !l.was_silent; }).sort(function(a,b){ return b.invoked_at - a.invoked_at; }).slice(0,2);
     var contextBlock = 'ARCHIVE SUMMARIES (' + allDiscs.length + ' discourses):\n\n' + summaries;
-    if(recentLogs.length){
-      var timeSinceLast = Math.floor((Date.now() - recentLogs[0].invoked_at) / 86400000);
-      var prevBlock = recentLogs.map(function(l){
-        return '[My Previous Witness Record - ' + new Date(l.invoked_at).toLocaleDateString() + ']\n' + l.response_text;
-      }).join('\n\n---\n\n');
-      
-      contextBlock += '\n\n---\n\nGUARDIAN INSTRUCTION:\n';
-      contextBlock += 'You last spoke to them ' + timeSinceLast + ' days ago.\n';
-      contextBlock += 'Review your Previous Witness Records. Compare them to the Current Archive Summaries.\n';
-      contextBlock += 'Are they circling the exact same narrative? Have they moved? Address the gap between what you told them last time, and what they have written since. If they have stagnated, be ruthless about the repetition.\n\n';
-      contextBlock += prevBlock;
-    }
+    
+if (recentLogs.length) {
+  var timeSinceLast = Math.floor((Date.now() - recentLogs[0].invoked_at) / 86400000);
+  
+  contextBlock += '\n═══════════════════════════════════\n';
+  contextBlock += 'GUARDIAN INSTRUCTION\n';
+  contextBlock += '═══════════════════════════════════\n\n';
+  contextBlock += `You last spoke to them ${timeSinceLast} days ago.\n\n`;
+  contextBlock += 'Review your Previous Witness Records below. Compare them to the Witness Records above.\n\n';
+  contextBlock += 'Look for:\n';
+  contextBlock += '· Are they circling the exact same narrative?\n';
+  contextBlock += '· Have they moved? Where? By how much?\n';
+  contextBlock += '· What did you tell them last time, and did they act on it or resist it?\n';
+  contextBlock += '· What appears in the records that they haven\'t named directly?\n';
+  contextBlock += '· Where do the emotional arcs tell a different story than the words?\n\n';
+  contextBlock += 'If they have stagnated, be ruthless about the repetition.\n';
+  contextBlock += 'If they have genuinely shifted, acknowledge the movement -- but don\'t congratulate. Just witness it.\n\n';
+  
+  contextBlock += '── PREVIOUS WITNESS RECORDS ──\n\n';
+  for (const log of recentLogs) {
+    contextBlock += `[${new Date(log.invoked_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}]\n`;
+    contextBlock += log.response_text + '\n\n---\n\n';
+  }
+}
     if(userAddition){ contextBlock += '\n\n---\n\nThe person has offered this after silence:\n' + userAddition; }
     realm.classList.remove('dimming');
     glyph.className = 'guardian-glyph watching';
@@ -5958,24 +6411,209 @@ async function summonGuardian(userAddition){
   }
 }
 
-async function buildGuardianContext(discs){
-  const results=[];
-  for(const d of discs){
-    const wordCount=(d.raw_text||'').trim().split(/\s+/).filter(Boolean).length;
-    const date=new Date(d.created_at||Date.now()).toLocaleDateString('en-US',{month:'short',year:'numeric'});
-    // Try pre-stored summary first
-    const stored=await dbGet('guardian_summaries',d.id);
-    if(stored&&stored.summary){
-      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${stored.summary}`);
-        } else if(wordCount<30){
-      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${(d.raw_text||'').slice(0,200)}`);
+async function buildGuardianContext(discs) {
+  const now = Date.now();
+  let contextBlock = '';
+  
+  // ── ARCHIVE OVERVIEW ────────────────────────────────────
+  const totalWords = discs.reduce((sum, d) => 
+    sum + ((d.raw_text || '').trim().split(/\s+/).filter(Boolean).length), 0
+  );
+  
+  const dates = discs
+    .filter(d => d.created_at)
+    .map(d => d.created_at)
+    .sort((a, b) => a - b);
+  
+  const firstDate = dates.length ? new Date(dates[0]).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'unknown';
+  const lastDate = dates.length ? new Date(dates[dates.length - 1]).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'unknown';
+  
+  contextBlock += '═══════════════════════════════════\n';
+  contextBlock += 'ARCHIVE WITNESS RECORDS\n';
+  contextBlock += '═══════════════════════════════════\n\n';
+  contextBlock += `Total discourses in the Soup: ${discs.length}\n`;
+  contextBlock += `Time span: ${firstDate} – ${lastDate}\n`;
+  contextBlock += `Total words: ${totalWords.toLocaleString()}\n\n`;
+  
+  // ── FAST MAPS ───────────────────────────────────────────
+  contextBlock += '── FAST MAPS (structured metadata for all discourses) ──\n\n';
+  
+  // Sort by date, newest first
+  const sorted = [...discs].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  
+  let mapNum = 0;
+  for (const d of sorted) {
+    mapNum++;
+    const fastMap = await dbGet('guardian_summaries', d.id);
+    const wordCount = (d.raw_text || '').trim().split(/\s+/).filter(Boolean).length;
+    const date = new Date(d.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    
+    contextBlock += `[DISCOURSE ${mapNum}] "${d.title || 'Untitled'}"\n`;
+    contextBlock += `Words: ${wordCount.toLocaleString()} · ${date}\n`;
+    
+    if (fastMap && fastMap.map_type === 'fast') {
+      // Use the Fast Map
+      if (fastMap.first_line) {
+        contextBlock += `First: "${fastMap.first_line.slice(0, 150)}"\n`;
+      }
+      if (fastMap.last_line) {
+        contextBlock += `Last: "${fastMap.last_line.slice(0, 150)}"\n`;
+      }
+      if (fastMap.key_terms && fastMap.key_terms.length) {
+        const termStr = fastMap.key_terms
+          .slice(0, 5)
+          .map(t => `${t.term}(${t.count})`)
+          .join(', ');
+        contextBlock += `Key terms: ${termStr}\n`;
+      }
+      if (fastMap.emotional_arc && fastMap.emotional_arc.direction) {
+        contextBlock += `Emotional arc: ${fastMap.emotional_arc.direction}\n`;
+      }
+      if (fastMap.extractive_summary) {
+        contextBlock += `Excerpt: "${fastMap.extractive_summary.slice(0, 300)}"\n`;
+      }
+      if (fastMap.watcher) {
+        if (fastMap.watcher.top_similar && fastMap.watcher.top_similar.length) {
+          const echoes = fastMap.watcher.top_similar
+            .map(s => `d_${s.id.slice(-4)} (${s.score})`)
+            .join(', ');
+          contextBlock += `Watcher: echoes ${echoes}\n`;
+        }
+        if (fastMap.watcher.top_contradictory && fastMap.watcher.top_contradictory.length) {
+          const contradicts = fastMap.watcher.top_contradictory
+            .map(s => `d_${s.id.slice(-4)} (${s.score})`)
+            .join(', ');
+          contextBlock += `Watcher: contradicts ${contradicts}\n`;
+        }
+      }
     } else {
-      // No Cartographer map yet -- trigger it for next time, use more text now
-      triggerCartographer(d.id);
-      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${(d.raw_text||'').slice(0,800)}...`);
+      // Fallback: no Fast Map yet -- use raw text snippet
+      const rawText = (d.raw_text || '').trim();
+      if (rawText.length > 0) {
+        contextBlock += `First: "${rawText.split('\n').find(l => l.trim().length > 0)?.trim().slice(0, 150) || '...'}"\n`;
+        if (wordCount <= 300) {
+          contextBlock += `Full text: "${rawText.slice(0, 400)}"\n`;
+        } else {
+          contextBlock += `Excerpt: "${rawText.slice(0, 300)}..."\n`;
+        }
+        contextBlock += `[Note: Unmapped terrain -- Fast Map will be generated on next save]\n`;
+      }
+    }
+    
+    contextBlock += '\n';
+  }
+  
+  // ── DEEP MAPS (local or API) ──────────────────────────────
+  const deepMaps = [];
+  for (const d of sorted) {
+    const deepMap = await dbGet('guardian_summaries', d.id + '_deep');
+    if (deepMap && deepMap.summary) {
+      deepMaps.push({
+        title: d.title || 'Untitled',
+        summary: deepMap.summary,
+        model: deepMap.model || 'unknown'
+      });
     }
   }
-  return results.join('\n\n');
+
+  if (deepMaps.length > 0) {
+    contextBlock += '\n── DEEP MAPS (rich local summaries for urgent discourses) ──\n\n';
+    for (const dm of deepMaps) {
+      contextBlock += `"${dm.title}": ${dm.summary}\n\n`;
+    }
+    contextBlock += `Generated by: ${deepMaps[0].model} (${deepMaps.length} discourses mapped)\n\n`;
+  }
+  
+  // ── WATCHER PATTERN FLAGS ───────────────────────────────
+  if (isWatcherReady && watcherDB) {
+    const allLinks = await wdb.getAll('links');
+    const allEmbs = await wdb.getAll('embeddings');
+    
+    if (allLinks.length > 0) {
+      contextBlock += '── WATCHER PATTERN FLAGS ──\n\n';
+      
+      // Top echoes (high similarity pairs)
+      const topLinks = [...allLinks]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+      
+      if (topLinks.length) {
+        contextBlock += 'High-similarity pairs (potential echoes):\n';
+        for (const link of topLinks) {
+          const discA = discTitleMap(discs, link.a);
+          const discB = discTitleMap(discs, link.b);
+          contextBlock += `· "${discA}" ↔ "${discB}" (${Math.round(link.score * 100)}%)\n`;
+        }
+        contextBlock += '\n';
+      }
+      
+      // Recurring terms across 3+ discourses
+      const allTerms = {};
+      for (const d of sorted) {
+        const fastMap = await dbGet('guardian_summaries', d.id);
+        if (fastMap && fastMap.key_terms) {
+          for (const term of fastMap.key_terms.slice(0, 5)) {
+            if (!allTerms[term.term]) allTerms[term.term] = [];
+            allTerms[term.term].push(d.title || 'Untitled');
+          }
+        }
+      }
+      
+      const recurringTerms = Object.entries(allTerms)
+        .filter(([, titles]) => titles.length >= 3)
+        .sort((a, b) => b[1].length - a[1].length)
+        .slice(0, 10);
+      
+      if (recurringTerms.length) {
+        contextBlock += 'Recurring terms across 3+ discourses:\n';
+        for (const [term, titles] of recurringTerms) {
+          contextBlock += `· "${term}" -- ${titles.length} discourses: ${titles.slice(0, 3).map(t => `"${t}"`).join(', ')}${titles.length > 3 ? `, +${titles.length - 3} more` : ''}\n`;
+        }
+        contextBlock += '\n';
+      }
+      
+      // Emotional arc patterns
+      const arcs = [];
+      for (const d of sorted) {
+        const fastMap = await dbGet('guardian_summaries', d.id);
+        if (fastMap && fastMap.emotional_arc && fastMap.emotional_arc.direction) {
+          arcs.push(fastMap.emotional_arc);
+        }
+      }
+      
+      if (arcs.length >= 3) {
+        const resolved = arcs.filter(a => a.tension_shift < -0.01).length;
+        const escalated = arcs.filter(a => a.tension_shift > 0.01).length;
+        const flat = arcs.filter(a => Math.abs(a.tension_shift) <= 0.01).length;
+        
+        // Most common arc
+        const arcCounts = {};
+        for (const a of arcs) {
+          const key = a.direction.split('→')[0]?.trim() || a.direction;
+          arcCounts[key] = (arcCounts[key] || 0) + 1;
+        }
+        const topArc = Object.entries(arcCounts).sort((a, b) => b[1] - a[1])[0];
+        
+        contextBlock += 'Emotional arc patterns across all discourses:\n';
+        contextBlock += `· ${resolved} resolved · ${escalated} escalated · ${flat} flat\n`;
+        if (topArc) {
+          contextBlock += `· Most common opening tone: "${topArc[0]}" (${topArc[1]} discourses)\n`;
+        }
+        contextBlock += '\n';
+      }
+    } else {
+      contextBlock += '── WATCHER PATTERN FLAGS ──\n\n';
+      contextBlock += 'No resonance links detected yet. The Watcher needs more material.\n\n';
+    }
+  }
+  
+  return contextBlock;
+}
+
+// Helper: resolve discourse title from ID
+function discTitleMap(discs, id) {
+  const d = discs.find(x => x.id === id);
+  return d ? (d.title || 'Untitled') : 'Unknown';
 }
 
 async function streamGuardianResponse(contextBlock, apiKey, baseUrl, model){
