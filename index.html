@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum v0.33.2</title>
+<title>NakedQuantum v0.33.4</title>
 <style>
 :root {
   --bg: #000000;
@@ -3610,6 +3610,9 @@ function showPanel(id){
   'view-lighthouse', 'view-forge', 'view-chat', 'view-memory', 
   'view-persona', 'view-guardian', 'view-ie'
 ];
+if (id !== 'view-guardian' && currentView === 'guardian') {
+    unloadDeepMapper();
+    }
   panels.forEach(p=>{
     const el=document.getElementById(p);
     if(el)el.classList.add('hidden');
@@ -5044,14 +5047,6 @@ async function selectUrgentDiscourses(discs, maxCount = 5) {
   return candidates.slice(0, maxCount);
 }
 
-// Unload model to free memory after Guardian finishes
-function unloadDeepMapper() {
-  deepMapper = null;
-  deepMapperReady = false;
-  // Let GC collect the model memory
-  if (typeof gc === 'function') gc();
-}
-
 function setMappingMode(mode) {
   localStorage.setItem('nq_cartographer_mode', mode);
   
@@ -6154,6 +6149,7 @@ async function openGuardianView(){
   guardianState = 'resting';
   resetGuardianUI();
   initMappingModeUI();
+  initDeepMapper();
   await renderGuardianLogs();
 }
 
@@ -6263,7 +6259,6 @@ async function summonGuardian(userAddition){
           if (subEl) subEl.textContent = 'Cartographer unavailable. Using Fast Maps.';
         }
         
-        unloadDeepMapper();
       }
     }
     
