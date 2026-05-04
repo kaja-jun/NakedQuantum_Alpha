@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="NakedQuantum">
 <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NakedQuantum_dev v0.32</title>
+<title>NakedQuantum_dev v0.32.1</title>
 <style>
 :root {
   --bg: #000000;
@@ -3352,8 +3352,23 @@ function enterSelectMode(item){
   selectMode=true;
   if(!selectedItems) selectedItems=new Set();
   if(item&&item.id) selectedItems.add(item.id);
-  if(currentMode=='soup') renderTableView().then(()=>renderSelectBar());
-  else renderSanctuaryView().then(()=>renderSelectBar());
+    // Save scroll positions before re-render
+  const scrollPositions = new Map();
+  document.querySelectorAll('.section-scroll-wrap').forEach((el, i) => {
+    scrollPositions.set(i, el.scrollLeft);
+  });
+
+  if(currentMode=='soup'){
+    renderTableView().then(()=>{
+      renderSelectBar();
+      // Restore scroll positions after re-render
+      document.querySelectorAll('.section-scroll-wrap').forEach((el, i) => {
+        if(scrollPositions.has(i)) el.scrollLeft = scrollPositions.get(i);
+      });
+    });
+  } else {
+    renderSanctuaryView().then(()=>renderSelectBar());
+  }
 }
 
 function renderSelectBar(){
@@ -3383,13 +3398,16 @@ function renderSelectBar(){
     return;
   }
 
-  if(count===1 && !hasFolder){
+    if(count===1){
     const id=[...selectedItems][0];
     const isDiscourse=id.startsWith('d_')||id.startsWith('n_');
+    const isFolder=id.startsWith('f_');
     const pills=[
       {icon:'✎',label:'Rename',action:()=>{exitSelectMode();openRenameForItem(id);}},
-      {icon:'▤',label:'Move',action:()=>batchMove()},
     ];
+    if(!isFolder){
+      pills.push({icon:'▤',label:'Move',action:()=>batchMove()});
+    }
     if(isDiscourse){
       pills.push({icon:'↓',label:'Export',action:()=>{exitSelectMode();exportDiscourseHTML(id);}});
     }
@@ -4668,11 +4686,11 @@ async function runCartographer(discourseId) {
               },
               body: JSON.stringify({
                 model: model,
-                max_tokens: 300,
+                max_tokens: 180,
                 messages:[
                   {
                     role: 'system', 
-                    content: 'You are the Cartographer of the Abyss. Compress this text into one dense paragraph (max 100 words). Map the core themes, unresolved tensions, and emotional texture. Do not categorize. Do not list. No preamble. Pure insight.'
+                    content: 'You are the Cartographer of the Abyss. Compress this text into one dense paragraph (max 120 words). Map the core themes, unresolved tensions, and emotional texture. Do not categorize. Do not list. No preamble. Pure insight.'
                   },
                   {role: 'user', content: textPayload}
                 ]
@@ -5922,11 +5940,12 @@ async function buildGuardianContext(discs){
     const stored=await dbGet('guardian_summaries',d.id);
     if(stored&&stored.summary){
       results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${stored.summary}`);
-    } else if(wordCount<30){
+        } else if(wordCount<30){
       results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${(d.raw_text||'').slice(0,200)}`);
     } else {
-      // Fallback to first 200 chars if no pre-summary
-      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${(d.raw_text||'').slice(0,200)}...`);
+      // No Cartographer map yet -- trigger it for next time, use more text now
+      triggerCartographer(d.id);
+      results.push(`[${date}] "${d.title||'Untitled'}" (${wordCount}w): ${(d.raw_text||'').slice(0,800)}...`);
     }
   }
   return results.join('\n\n');
