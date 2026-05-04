@@ -4886,9 +4886,31 @@ for(const s of similarities.filter(s => s.score > 0.65)){
   const currentArc = fastMap.emotional_arc?.tension_shift || 0;
   const otherArc = otherMap.emotional_arc?.tension_shift || 0;
   // Opposite directions = one resolving, one escalating
-  if((currentArc > 0.02 && otherArc < -0.02) || (currentArc < -0.02 && otherArc > 0.02)){
+    if((currentArc > 0.02 && otherArc < -0.02) || (currentArc < -0.02 && otherArc > 0.02)){
     topContradictory.push(s);
   }
+}
+
+  // Resolve discourse titles
+  async function resolveTitle(id) {
+    const d = await getDiscourse(id);
+    return d ? d.title || 'Untitled' : 'Unknown';
+  }
+  
+  fastMap.watcher = {
+    top_similar: await Promise.all(topSimilar.map(async s => ({
+      id: s.id,
+      score: parseFloat(s.score.toFixed(3)),
+      title: await resolveTitle(s.id)
+    }))),
+    top_contradictory: await Promise.all(topContradictory.map(async s => ({
+      id: s.id,
+      score: parseFloat(s.score.toFixed(3)),
+      title: await resolveTitle(s.id)
+    })))
+  };
+  
+  return fastMap;
 }
 
 async function generateFastMap(discourseId) {
@@ -4934,28 +4956,6 @@ async function generateFastMap(discourseId) {
   } catch (err) {
     console.error('Fast Map error:', err);
   }
-}
-
-  // Resolve discourse titles
-async function resolveTitle(id) {
-    const d = await getDiscourse(id);
-    return d ? d.title || 'Untitled' : 'Unknown';
-  }
-  
-  fastMap.watcher = {
-    top_similar: await Promise.all(topSimilar.map(async s => ({
-      id: s.id,
-      score: parseFloat(s.score.toFixed(3)),
-      title: await resolveTitle(s.id)
-    }))),
-    top_contradictory: await Promise.all(topContradictory.map(async s => ({
-      id: s.id,
-      score: parseFloat(s.score.toFixed(3)),
-      title: await resolveTitle(s.id)
-    })))
-  };
-  
-  return fastMap;
 }
 
 // ── LOCAL DEEP MAPPER ────────────────────────────────────
